@@ -1,7 +1,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "sparse_matrix.h"
+#include "sparse_ops.h"
 
 #define FULL_MASK       0xffffffff
 

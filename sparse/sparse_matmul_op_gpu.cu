@@ -2,7 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "sparse_matrix.h"
+#include "sparse_ops.h"
 #include "sparse_matmul_op.h"
 
 
