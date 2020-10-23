@@ -15,11 +15,8 @@ class SparseMatMul(torch.autograd.Function):
                 trans_b: bool = False) -> torch.Tensor:
         ctx.save_for_backward(a, b)
 
-        ctx.layout = layout
-        ctx.mode = mode
-
-        ctx.trans_a = trans_a
-        ctx.trans_b = trans_b
+        ctx.mode, ctx.layout = mode, layout
+        ctx.trans_a, ctx.trans_b = trans_a, trans_b
 
         return sparse_ops.batched_sparse_matmul_op(
             a, b, mode,
@@ -29,35 +26,38 @@ class SparseMatMul(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx: Any, dc: torch.Tensor):
-        a, b = torch.saved_tensors
+        a, b = ctx.saved_tensors
+
+        mode, layout = ctx.mode, ctx.layout
+        trans_a, trans_b = ctx.trans_a, ctx.trans_b
 
         if ctx.needs_input_grad[0]:
-            if ctx.trans_a:
+            if trans_a:
                 da = sparse_ops.batched_sparse_matmul_op(
-                    b, dc, ctx.mode[1] + ctx.mode[2] + ctx.mode[0],
-                    ctx.layout.row_table, ctx.layout.row_table_ptr,
-                    ctx.layout.col_table, ctx.layout.col_table_ptr,
-                    ctx.trans_b, True)
+                    b, dc, mode[1] + mode[2] + mode[0],
+                    layout.row_table, layout.row_table_ptr,
+                    layout.col_table, layout.col_table_ptr,
+                    trans_b, True)
             else:
                 da = sparse_ops.batched_sparse_matmul_op(
-                    dc, b, ctx.mode[1] + ctx.mode[0] + ctx.mode[2],
-                    ctx.layout.row_table, ctx.layout.row_table_ptr,
-                    ctx.layout.col_table, ctx.layout.col_table_ptr,
-                    False, not ctx.trans_b)
+                    dc, b, mode[1] + mode[0] + mode[2],
+                    layout.row_table, layout.row_table_ptr,
+                    layout.col_table, layout.col_table_ptr,
+                    False, not trans_b)
 
         if ctx.needs_input_grad[1]:
-            if ctx.trans_b:
+            if trans_b:
                 db = sparse_ops.batched_sparse_matmul_op(
-                    dc, a, ctx.mode[2] + ctx.mode[0] + ctx.mode[1],
-                    ctx.layout.row_table, ctx.layout.row_table_ptr,
-                    ctx.layout.col_table, ctx.layout.col_table_ptr,
-                    True, ctx.trans_a)
+                    dc, a, mode[2] + mode[0] + mode[1],
+                    layout.row_table, layout.row_table_ptr,
+                    layout.col_table, layout.col_table_ptr,
+                    True, trans_a)
             else:
                 db = sparse_ops.batched_sparse_matmul_op(
-                    a, dc, ctx.mode[2] + ctx.mode[1] + ctx.mode[0],
-                    ctx.layout.row_table, ctx.layout.row_table_ptr,
-                    ctx.layout.col_table, ctx.layout.col_table_ptr,
-                    not ctx.trans_a, False)
+                    a, dc, mode[2] + mode[1] + mode[0],
+                    layout.row_table, layout.row_table_ptr,
+                    layout.col_table, layout.col_table_ptr,
+                    not trans_a, False)
 
         return da, db, None, None, None, None
 
