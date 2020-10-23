@@ -8,11 +8,11 @@
 
 torch::Tensor batched_sparse_smm_op(torch::Tensor a,
                                     torch::Tensor b,
+                                    const std::string& mode,
                                     torch::Tensor row_table,
                                     torch::Tensor row_table_ptr,
                                     torch::Tensor col_table,
                                     torch::Tensor col_table_ptr,
-                                    const std::string& mode,
                                     bool trans_a,
                                     bool trans_b) {
     if (mode == "sdd") {

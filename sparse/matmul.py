@@ -9,8 +9,8 @@ class SparseMatMul(torch.autograd.Function):
     def forward(ctx: Any,
                 a: torch.Tensor,
                 b: torch.Tensor,
+                mode: str,
                 layout: SparseLayout,
-                mode: str = 'sdd',
                 transpose_a: bool = False,
                 transpose_b: bool = False) -> torch.Tensor:
         ctx.save_for_backward(a, b)
