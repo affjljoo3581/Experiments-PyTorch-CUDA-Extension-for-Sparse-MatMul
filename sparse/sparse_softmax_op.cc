@@ -1,7 +1,7 @@
 #include <sys/types.h>
 #include <torch/extension.h>
 
-#include "sparse_matrix.h"
+#include "sparse_ops.h"
 #include "sparse_softmax_op.h"
 
 
@@ -26,11 +26,4 @@ torch::Tensor sparse_softmax_op_forward(torch::Tensor x,
     );
 
     return y.reshape(output_shape);
-}
-
-
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("sparse_softmax_op_forward",
-          &sparse_softmax_op_forward,
-          "Sparse Softmax Activation");
 }

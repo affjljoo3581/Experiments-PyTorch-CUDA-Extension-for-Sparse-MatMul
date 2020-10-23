@@ -3,7 +3,7 @@
 #include <sys/types.h>
 #include <torch/extension.h>
 
-#include "sparse_matrix.h"
+#include "sparse_ops.h"
 #include "sparse_matmul_op.h"
 
 
@@ -113,11 +113,4 @@ torch::Tensor batched_sparse_matmul_op(torch::Tensor a,
 
         return c.reshape(output_shape);
     }
-}
-
-
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("batched_sparse_matmul_op",
-          &batched_sparse_matmul_op,
-          "Batched Sparse Matrix Multiplication");
 }
