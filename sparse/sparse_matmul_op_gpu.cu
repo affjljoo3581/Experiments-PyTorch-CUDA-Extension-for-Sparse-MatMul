@@ -2,7 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-#include "sparse_smm_op.h"
+#include "sparse_matmul_op.h"
 
 
 /**
@@ -42,7 +42,7 @@ __device__ void load_matrix_32x32_tile_sync(
  * Blocks               : (Blocks, Batches)
  * Threads per Block    : (32, 32)
  */
-__global__ void batched_sparse_smm_op_32x32_sdd_kernel(
+__global__ void batched_sparse_matmul_op_32x32_sdd_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
@@ -107,7 +107,7 @@ __global__ void batched_sparse_smm_op_32x32_sdd_kernel(
  * Blocks               : (Batches, Rows, Columns)
  * Threads per Block    : (32, 32)
  */
-__global__ void batched_sparse_smm_op_32x32_dsd_kernel(
+__global__ void batched_sparse_matmul_op_32x32_dsd_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
@@ -181,7 +181,7 @@ __global__ void batched_sparse_smm_op_32x32_dsd_kernel(
  * Blocks               : (Batches, Rows, Columns)
  * Threads per Block    : (32, 32)
  */
-__global__ void batched_sparse_smm_op_32x32_dds_kernel(
+__global__ void batched_sparse_matmul_op_32x32_dds_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
@@ -247,7 +247,7 @@ __global__ void batched_sparse_smm_op_32x32_dds_kernel(
 }
 
 
-void batched_sparse_smm_op_32x32_sdd(
+void batched_sparse_matmul_op_32x32_sdd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
@@ -263,14 +263,14 @@ void batched_sparse_smm_op_32x32_sdd(
     dim3 blocks(total_blocks, total_batches);
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
-    batched_sparse_smm_op_32x32_sdd_kernel<<<blocks, threadsPerBlock>>>(
+    batched_sparse_matmul_op_32x32_sdd_kernel<<<blocks, threadsPerBlock>>>(
         matrix_a, matrix_b, matrix_c,
         sparse_table, total_blocks,
         total_m, total_n, total_k, trans_a, trans_b
     );
 }
 
-void batched_sparse_smm_op_32x32_dsd(
+void batched_sparse_matmul_op_32x32_dsd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
@@ -291,13 +291,13 @@ void batched_sparse_smm_op_32x32_dsd(
     );
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
-    batched_sparse_smm_op_32x32_dsd_kernel<<<blocks, threadsPerBlock>>>(
+    batched_sparse_matmul_op_32x32_dsd_kernel<<<blocks, threadsPerBlock>>>(
         matrix_a, matrix_b, matrix_c, sparse_table, sparse_table_ptr,
         total_blocks, total_m, total_n, total_k, trans_a, trans_b
     );
 }
 
-void batched_sparse_smm_op_32x32_dds(
+void batched_sparse_matmul_op_32x32_dds(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
@@ -318,7 +318,7 @@ void batched_sparse_smm_op_32x32_dds(
     );
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
-    batched_sparse_smm_op_32x32_dds_kernel<<<blocks, threadsPerBlock>>>(
+    batched_sparse_matmul_op_32x32_dds_kernel<<<blocks, threadsPerBlock>>>(
         matrix_a, matrix_b, matrix_c, sparse_table, sparse_table_ptr,
         total_blocks, total_m, total_n, total_k, trans_a, trans_b
     );

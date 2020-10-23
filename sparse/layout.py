@@ -4,7 +4,8 @@ from typing import Tuple
 
 class SparseLayout:
     def __init__(self, pattern: torch.Tensor):
-        self.row_table, self.row_table_ptr = self._create_sparse_table(pattern)
+        self.row_table, self.row_table_ptr = \
+            self._create_sparse_table(pattern, transpose=False)
         self.col_table, self.col_table_ptr = \
             self._create_sparse_table(pattern, transpose=True)
 
@@ -13,6 +14,7 @@ class SparseLayout:
                              transpose: bool = False
                              ) -> Tuple[torch.Tensor, torch.Tensor]:
         if transpose:
+            # Get non-zero element indices sorted by column.
             rows, cols = torch.nonzero(pattern.t(), as_tuple=True)
             rows, cols = cols, rows
         else:
@@ -22,9 +24,8 @@ class SparseLayout:
         block_pos = rows * pattern.size(1) + cols
         block_idx = pattern.flatten().cumsum(0).index_select(0, block_pos) - 1
 
-        sparse_table = torch.stack(
-            (block_idx.short(), block_pos.short()), dim=1)
-        sparse_table = sparse_table.flatten()
+        sparse_table = torch.stack((block_idx, block_pos), dim=1)
+        sparse_table = sparse_table.short().flatten()
 
         # Create a table pointers which are start indices of rows.
         sparse_table_ptr = pattern.new_zeros(

@@ -7,7 +7,7 @@
 #define TILE_32x32_SIZE         (TILE_32x32_WIDTH * TILE_32x32_WIDTH)
 
 
-void batched_sparse_smm_op_32x32_sdd(
+void batched_sparse_matmul_op_32x32_sdd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
@@ -21,7 +21,7 @@ void batched_sparse_smm_op_32x32_sdd(
             bool        trans_b
 );
 
-void batched_sparse_smm_op_32x32_dsd(
+void batched_sparse_matmul_op_32x32_dsd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
@@ -36,7 +36,7 @@ void batched_sparse_smm_op_32x32_dsd(
             bool        trans_b
 );
 
-void batched_sparse_smm_op_32x32_dds(
+void batched_sparse_matmul_op_32x32_dds(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,

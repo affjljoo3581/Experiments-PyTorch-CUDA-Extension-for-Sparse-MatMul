@@ -3,18 +3,18 @@
 #include <sys/types.h>
 #include <torch/extension.h>
 
-#include "sparse_smm_op.h"
+#include "sparse_matmul_op.h"
 
 
-torch::Tensor batched_sparse_smm_op(torch::Tensor a,
-                                    torch::Tensor b,
-                                    const std::string& mode,
-                                    torch::Tensor row_table,
-                                    torch::Tensor row_table_ptr,
-                                    torch::Tensor col_table,
-                                    torch::Tensor col_table_ptr,
-                                    bool trans_a,
-                                    bool trans_b) {
+torch::Tensor batched_sparse_matmul_op(torch::Tensor a,
+                                       torch::Tensor b,
+                                       const std::string& mode,
+                                       torch::Tensor row_table,
+                                       torch::Tensor row_table_ptr,
+                                       torch::Tensor col_table,
+                                       torch::Tensor col_table_ptr,
+                                       bool trans_a,
+                                       bool trans_b) {
     if (mode == "sdd") {
         // Create output sparse-tensor shape with preserving extra-batch
         // dimensions.
@@ -39,7 +39,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
         auto c = a.new_empty({total_batches, total_blocks,
                               TILE_32x32_WIDTH, TILE_32x32_WIDTH});
 
-        batched_sparse_smm_op_32x32_sdd(
+        batched_sparse_matmul_op_32x32_sdd(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
             row_table.data_ptr<short>(), total_blocks, total_batches,
             total_m, total_n, total_k, trans_a, trans_b
@@ -72,7 +72,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         auto c = a.new_empty({total_batches, total_m, total_n});
 
-        batched_sparse_smm_op_32x32_dsd(
+        batched_sparse_matmul_op_32x32_dsd(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
             sparse_table.data_ptr<short>(), sparse_table_ptr.data_ptr<int>(),
             total_blocks, total_batches, total_m, total_n, total_k,
@@ -106,7 +106,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         auto c = a.new_empty({total_batches, total_m, total_n});
 
-        batched_sparse_smm_op_32x32_dds(
+        batched_sparse_matmul_op_32x32_dds(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
             sparse_table.data_ptr<short>(), sparse_table_ptr.data_ptr<int>(),
             total_blocks, total_batches, total_m, total_n, total_k,
@@ -119,7 +119,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("batched_sparse_smm_op",
-          &batched_sparse_smm_op,
-          "Batched Sparse MatMul for Single Precision");
+    m.def("batched_sparse_matmul_op",
+          &batched_sparse_matmul_op,
+          "Batched Sparse Matrix Multiplication");
 }
