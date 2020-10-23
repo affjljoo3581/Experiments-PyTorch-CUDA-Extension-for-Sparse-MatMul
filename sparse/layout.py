@@ -9,7 +9,7 @@ class SparseLayout:
         self.col_blocks, self.col_table = \
             self._create_sparse_info(pattern, transpose=True)
 
-    def _create_sparse_into(self,
+    def _create_sparse_info(self,
                             pattern: torch.Tensor,
                             transpose: bool = False
                             ) -> Tuple[torch.Tensor, torch.Tensor]:
