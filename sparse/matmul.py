@@ -14,7 +14,6 @@ class SparseMatMul(torch.autograd.Function):
                 trans_a: bool = False,
                 trans_b: bool = False) -> torch.Tensor:
         ctx.save_for_backward(a, b)
-
         ctx.mode, ctx.layout = mode, layout
         ctx.trans_a, ctx.trans_b = trans_a, trans_b
 
@@ -27,10 +26,14 @@ class SparseMatMul(torch.autograd.Function):
     @staticmethod
     def backward(ctx: Any, dc: torch.Tensor):
         a, b = ctx.saved_tensors
-        da, db = None, None
-
         mode, layout = ctx.mode, ctx.layout
         trans_a, trans_b = ctx.trans_a, ctx.trans_b
+
+        # Note that all tensors in sparse operations must be contiguous.
+        if not dc.is_contiguous():
+            dc = dc.contiguous()
+
+        da, db = None, None
 
         if ctx.needs_input_grad[0]:
             if trans_a:
