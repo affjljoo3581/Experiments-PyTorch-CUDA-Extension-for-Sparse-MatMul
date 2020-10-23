@@ -11,9 +11,9 @@ class SparseSoftmax(torch.autograd.Function):
         ctx.save_for_backward(x)
         ctx.layout = layout
 
-        return sparse_ops.sparse_softmax_op_forward(x,
-                                                    layout.row_blocks,
-                                                    layout.row_table)
+        return sparse_ops.sparse_softmax_forward(x,
+                                                 layout.row_blocks,
+                                                 layout.row_table)
 
     @staticmethod
     def backward(ctx: Any, dy: torch.Tensor

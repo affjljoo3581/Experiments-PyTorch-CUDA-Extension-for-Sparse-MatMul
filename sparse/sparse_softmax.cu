@@ -110,7 +110,7 @@ __device__ __forceinline__ float reduce_sparse_matrix_32x32_row_sum(
  * Blocks               : (Batches, Total Rows)
  * Threads per Block    : (32, 32)
  */
-__global__ void sparse_softmax_op_32x32_forward_kernel(
+__global__ void sparse_softmax_32x32_forward_kernel(
     const   float*  __restrict__    matrix_x,
             float*  __restrict__    matrix_y,
     const   short*  __restrict__    sparse_blocks,
@@ -155,19 +155,27 @@ __global__ void sparse_softmax_op_32x32_forward_kernel(
 }
 
 
-void sparse_softmax_op_32x32_forward(
-    const   float*      matrix_x,
-            float*      matrix_y,
-    const   short*      sparse_blocks,
-    const   int*        sparse_table,
-            uint        total_blocks,
-            uint        total_batches,
-            uint        total_rows
-) {
+torch::Tensor sparse_softmax_forward(torch::Tensor x,
+                                     torch::Tensor row_blocks,
+                                     torch::Tensor row_table) {
+    auto output_shape = x.sizes();
+
+    // Merge all batch dimensions to single one and create empty output tensor.
+    x = x.flatten(0, -4);
+    auto y = torch::empty_like(x);
+
+    // Get the dimension sizes.
+    int64_t total_batches = x.size(0);
+    int64_t total_blocks = row_blocks.size(0) / 2;
+    int64_t total_rows = (row_table.size(0) - 1) * TILE_32x32_WIDTH;
+
     dim3 blocks(total_batches, total_rows);
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
-    sparse_softmax_op_32x32_forward_kernel<<<blocks, threadsPerBlock>>>(
-        matrix_x, matrix_y, sparse_blocks, sparse_table, total_blocks
+    sparse_softmax_32x32_forward_kernel<<<blocks, threadsPerBlock>>>(
+        x.data_ptr<float>(), y.data_ptr<float>(),
+        row_blocks.data_ptr<short>(), row_table.data_ptr<int>(), total_blocks
     );
+
+    return y.reshape(output_shape);
 }
