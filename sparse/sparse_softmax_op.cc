@@ -12,7 +12,7 @@ torch::Tensor sparse_softmax_op_forward(torch::Tensor x,
 
     // Merge all batch dimensions to single one and create empty output tensor.
     x = x.flatten(0, -4);
-    y = torch::empty_like(x);
+    auto y = torch::empty_like(x);
 
     // Get the dimension sizes.
     uint total_batches = x.size(0);
