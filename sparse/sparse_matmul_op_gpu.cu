@@ -47,7 +47,7 @@ __global__ void batched_sparse_matmul_op_32x32_sdd_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
-    const   short2* __restrict__    sparse_blocks,
+    const   short*  __restrict__    sparse_blocks,
             uint                    total_blocks,
             uint                    total_m,
             uint                    total_n,
