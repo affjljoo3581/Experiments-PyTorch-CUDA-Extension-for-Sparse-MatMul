@@ -27,6 +27,7 @@ class SparseMatMul(torch.autograd.Function):
     @staticmethod
     def backward(ctx: Any, dc: torch.Tensor):
         a, b = ctx.saved_tensors
+        da, db = None, None
 
         mode, layout = ctx.mode, ctx.layout
         trans_a, trans_b = ctx.trans_a, ctx.trans_b
