@@ -22,10 +22,10 @@ class SparseMatMul(torch.autograd.Function):
         ctx.transpose_b = transpose_b
 
         return sparse_ops.batched_sparse_smm_op(
-            a, b,
+            a, b, mode,
             layout.row_table, layout.row_table_ptr,
             layout.col_table, layout.col_table_ptr,
-            transpose_a, transpose_b, mode)
+            transpose_a, transpose_b)
 
     @staticmethod
     def backward():
