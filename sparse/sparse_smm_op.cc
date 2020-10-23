@@ -1,18 +1,17 @@
-#include <torch/extension.h>
-
 #include <vector>
 #include <string>
 #include <sys/types.h>
+#include <torch/extension.h>
+
 #include "sparse_smm_op.h"
 
 
 torch::Tensor batched_sparse_smm_op(torch::Tensor a,
                                     torch::Tensor b,
-                                    torch::Tensor sparse_table,
-                                    torch::Tensor row_block_indices,
-                                    torch::Tensor row_block_indptr,
-                                    torch::Tensor col_block_indices,
-                                    torch::Tensor col_block_indptr,
+                                    torch::Tensor row_table,
+                                    torch::Tensor row_table_ptr,
+                                    torch::Tensor col_table,
+                                    torch::Tensor col_table_ptr,
                                     bool trans_a,
                                     bool trans_b,
                                     const std::string& mode) {
@@ -22,7 +21,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
         std::vector<int64_t> output_shape = a.sizes().vec();
         output_shape.pop_back();
         output_shape.pop_back();
-        output_shape.push_back(sparse_table.size(0));
+        output_shape.push_back(row_table.size(0) / 2);
         output_shape.push_back(TILE_32x32_WIDTH);
         output_shape.push_back(TILE_32x32_WIDTH);
 
@@ -32,7 +31,7 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         // Get the dimension sizes and create the output sparse-tensor.
         int64_t total_batches = a.size(0);
-        int64_t total_blocks = sparse_table.size(0);
+        int64_t total_blocks = row_table.size(0) / 2;
         int64_t total_m = a.size(trans_a ? -1 : -2);
         int64_t total_n = b.size(trans_b ? -2 : -1);
         int64_t total_k = b.size(trans_b ? -1 : -2);
@@ -42,16 +41,16 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         batched_sparse_smm_op_32x32_sdd(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
-            sparse_table.data_ptr<short>(), total_blocks, total_batches,
+            row_table.data_ptr<short>(), total_blocks, total_batches,
             total_m, total_n, total_k, trans_a, trans_b
         );
 
         return c.reshape(output_shape);
     } else if (mode == "dsd") {
-        auto block_indices = trans_a ? row_block_indices : col_block_indices;
-        auto block_indptr = trans_a ? row_block_indptr : col_block_indptr;
+        auto sparse_table = trans_a ? col_table : row_table;
+        auto sparse_table_ptr = trans_a ? col_table_ptr : row_table_ptr;
 
-        int64_t total_m = block_indices.size(0) - 1;
+        int64_t total_m = (sparse_table_ptr.size(0) - 1) * TILE_32x32_WIDTH;
         int64_t total_n = b.size(trans_b ? -2 : -1);
         int64_t total_k = b.size(trans_b ? -1 : -2);
 
@@ -69,24 +68,24 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         // Get the dimension sizes and create the output dense tensor.
         int64_t total_batches = a.size(0);
-        int64_t total_blocks = sparse_table.size(0);
+        int64_t total_blocks = sparse_table.size(0) / 2;
 
         auto c = a.new_empty({total_batches, total_m, total_n});
 
         batched_sparse_smm_op_32x32_dsd(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
-            sparse_table.data_ptr<short>(), block_indices.data_ptr<int32_t>(),
-            block_indptr.data_ptr<int32_t>(), total_blocks, total_batches,
-            total_m, total_n, total_k, trans_a, trans_b
+            sparse_table.data_ptr<short>(), sparse_table_ptr.data_ptr<int>(),
+            total_blocks, total_batches, total_m, total_n, total_k,
+            trans_a, trans_b
         );
 
         return c.reshape(output_shape);
     } else if (mode == "dds") {
-        auto block_indices = trans_b ? col_block_indices : row_block_indices;
-        auto block_indptr = trans_b ? col_block_indptr : row_block_indptr;
+        auto sparse_table = trans_b ? row_table : col_table;
+        auto sparse_table_ptr = trans_b ? row_table_ptr : col_table_ptr;
 
         int64_t total_m = a.size(trans_a ? -1 : -2);
-        int64_t total_n = block_indices.size(0) - 1;
+        int64_t total_n = (sparse_table_ptr.size(0) - 1) * TILE_32x32_WIDTH;
         int64_t total_k = a.size(trans_a ? -2 : -1);
 
         // Create output dense tensor shape with preserving extra-batch
@@ -103,15 +102,15 @@ torch::Tensor batched_sparse_smm_op(torch::Tensor a,
 
         // Get the dimension sizes and create the output dense tensor.
         int64_t total_batches = a.size(0);
-        int64_t total_blocks = sparse_table.size(0);
+        int64_t total_blocks = sparse_table.size(0) / 2;
 
         auto c = a.new_empty({total_batches, total_m, total_n});
 
         batched_sparse_smm_op_32x32_dds(
             a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
-            sparse_table.data_ptr<short>(), block_indices.data_ptr<int32_t>(),
-            block_indptr.data_ptr<int32_t>(), total_blocks, total_batches,
-            total_m, total_n, total_k, trans_a, trans_b
+            sparse_table.data_ptr<short>(), sparse_table_ptr.data_ptr<int>(),
+            total_blocks, total_batches, total_m, total_n, total_k,
+            trans_a, trans_b
         );
 
         return c.reshape(output_shape);

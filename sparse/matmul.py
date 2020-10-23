@@ -10,21 +10,21 @@ class SparseMatMul(torch.autograd.Function):
                 a: torch.Tensor,
                 b: torch.Tensor,
                 layout: SparseLayout,
-                transpose_a: bool,
-                transpose_b: bool,
-                mode: str = 'sdd'):
+                mode: str = 'sdd',
+                transpose_a: bool = False,
+                transpose_b: bool = False) -> torch.Tensor:
         ctx.save_for_backward(a, b)
 
         ctx.layout = layout
+        ctx.mode = mode
+
         ctx.transpose_a = transpose_a
         ctx.transpose_b = transpose_b
 
-        ctx.mode = mode
-
         return sparse_ops.batched_sparse_smm_op(
-            a, b, layout.sparse_table,
-            layout.row_block_indices, layout.row_block_indptr,
-            layout.col_block_indices, layout.col_block_indptr,
+            a, b,
+            layout.row_table, layout.row_table_ptr,
+            layout.col_table, layout.col_table_ptr,
             transpose_a, transpose_b, mode)
 
     @staticmethod
