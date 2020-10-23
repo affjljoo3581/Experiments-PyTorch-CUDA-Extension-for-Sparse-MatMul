@@ -4,15 +4,15 @@ from typing import Tuple
 
 class SparseLayout:
     def __init__(self, pattern: torch.Tensor):
-        self.row_table, self.row_table_ptr = \
-            self._create_sparse_table(pattern, transpose=False)
-        self.col_table, self.col_table_ptr = \
-            self._create_sparse_table(pattern, transpose=True)
+        self.row_blocks, self.row_table = \
+            self._create_sparse_info(pattern, transpose=False)
+        self.col_blocks, self.col_table = \
+            self._create_sparse_info(pattern, transpose=True)
 
-    def _create_sparse_table(self,
-                             pattern: torch.Tensor,
-                             transpose: bool = False
-                             ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _create_sparse_into(self,
+                            pattern: torch.Tensor,
+                            transpose: bool = False
+                            ) -> Tuple[torch.Tensor, torch.Tensor]:
         if transpose:
             # Get non-zero element indices sorted by column.
             rows, cols = torch.nonzero(pattern.t(), as_tuple=True)
@@ -20,21 +20,22 @@ class SparseLayout:
         else:
             rows, cols = torch.nonzero(pattern, as_tuple=True)
 
-        # Construct a sparse table with block indices and positions.
+        # Construct a sparse block information with their indices and
+        # positions.
         block_pos = rows * pattern.size(1) + cols
         block_idx = pattern.flatten().cumsum(0).index_select(0, block_pos) - 1
 
-        sparse_table = torch.stack((block_idx, block_pos), dim=1)
-        sparse_table = sparse_table.short().flatten()
+        sparse_blocks = torch.stack((block_idx, block_pos), dim=1)
+        sparse_blocks = sparse_blocks.short().flatten()
 
-        # Create a table pointers which are start indices of rows.
-        sparse_table_ptr = pattern.new_zeros(
+        # Create a sparse table which maps each row to sparse blocks.
+        sparse_table = pattern.new_zeros(
             pattern.size(1 if transpose else 0) + 1, dtype=torch.int)
 
-        sparse_table_ptr.index_add_(
+        sparse_table.index_add_(
             dim=0,
             index=(cols if transpose else rows) + 1,
             source=torch.ones(rows.size(0), dtype=torch.int))
-        sparse_table_ptr = sparse_table_ptr.cumsum(0, dtype=torch.int)
+        sparse_table = sparse_table.cumsum(0, dtype=torch.int)
 
-        return sparse_table.cuda(), sparse_table_ptr.cuda()
+        return sparse_blocks.cuda(), sparse_table.cuda()

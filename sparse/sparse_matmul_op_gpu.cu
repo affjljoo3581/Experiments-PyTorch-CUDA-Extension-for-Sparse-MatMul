@@ -2,6 +2,7 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include "sparse_matrix.h"
 #include "sparse_matmul_op.h"
 
 
@@ -46,7 +47,7 @@ __global__ void batched_sparse_matmul_op_32x32_sdd_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
-    const   short*  __restrict__    sparse_table,
+    const   short2* __restrict__    sparse_blocks,
             uint                    total_blocks,
             uint                    total_m,
             uint                    total_n,
@@ -58,7 +59,7 @@ __global__ void batched_sparse_matmul_op_32x32_sdd_kernel(
     __shared__ float tile_b[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
 
     // Load current sparse-block information.
-    short2 sparse_block = *((short2 *) sparse_table + blockIdx.x);
+    short2 sparse_block = *((short2 *) sparse_blocks + blockIdx.x);
     uint block_stride = (total_n + TILE_32x32_WIDTH - 1) / TILE_32x32_WIDTH;
     uint offset_m = sparse_block.y / block_stride * TILE_32x32_WIDTH;
     uint offset_n = sparse_block.y % block_stride * TILE_32x32_WIDTH;
@@ -104,15 +105,15 @@ __global__ void batched_sparse_matmul_op_32x32_sdd_kernel(
  * Multiply a sparse matrix with a dense matrix and create new dense matrix
  * according to the given sparse layout.
  * 
- * Blocks               : (Batches, Rows, Columns)
+ * Blocks               : (Batches, Block Rows, Block Columns)
  * Threads per Block    : (32, 32)
  */
 __global__ void batched_sparse_matmul_op_32x32_dsd_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
-    const   short*  __restrict__    sparse_table,
-    const   int*    __restrict__    sparse_table_ptr,
+    const   short*  __restrict__    sparse_blocks,
+    const   int*    __restrict__    sparse_table,
             uint                    total_blocks,
             uint                    total_m,
             uint                    total_n,
@@ -135,13 +136,13 @@ __global__ void batched_sparse_matmul_op_32x32_dsd_kernel(
 
     // Copy sub-matrices to the shared memory and accumulate tiled matrix
     // multiplication.
-    uint block_ptr = sparse_table_ptr[blockIdx.y];
-    uint end_block_ptr = sparse_table_ptr[blockIdx.y + 1];
+    uint block_ptr = sparse_table[threadIdx.y];
+    uint end_block_ptr = sparse_table[threadIdx.y + 1];
 
     float accumulator = 0.0f;
     for (; block_ptr < end_block_ptr; block_ptr ++) {
         // Get current sparse-block in corresponding row.
-        short2 sparse_block = *((short2 *) sparse_table + block_ptr);
+        short2 sparse_block = *((short2 *) sparse_blocks + block_ptr);
         uint offset_k = (trans_a
                          ? sparse_block.y / block_stride
                          : sparse_block.y % block_stride) * TILE_32x32_WIDTH;
@@ -178,15 +179,15 @@ __global__ void batched_sparse_matmul_op_32x32_dsd_kernel(
  * Multiply a dense matrix with a sparse matrix and create new dense matrix
  * according to the given sparse layout.
  * 
- * Blocks               : (Batches, Rows, Columns)
+ * Blocks               : (Batches, Block Rows, Block Columns)
  * Threads per Block    : (32, 32)
  */
 __global__ void batched_sparse_matmul_op_32x32_dds_kernel(
     const   float*  __restrict__    matrix_a,
     const   float*  __restrict__    matrix_b,
             float*  __restrict__    matrix_c,
-    const   short*  __restrict__    sparse_table,
-    const   int*    __restrict__    sparse_table_ptr,
+    const   short*  __restrict__    sparse_blocks,
+    const   int*    __restrict__    sparse_table,
             uint                    total_blocks,
             uint                    total_m,
             uint                    total_n,
@@ -209,8 +210,8 @@ __global__ void batched_sparse_matmul_op_32x32_dds_kernel(
 
     // Copy sub-matrices to the shared memory and accumulate tiled matrix
     // multiplication.
-    uint block_ptr = sparse_table_ptr[blockIdx.z];
-    uint end_block_ptr = sparse_table_ptr[blockIdx.z + 1];
+    uint block_ptr = sparse_table[blockIdx.z];
+    uint end_block_ptr = sparse_table[blockIdx.z + 1];
 
     float accumulator = 0.0f;
     for (; block_ptr < end_block_ptr; block_ptr ++) {
@@ -251,7 +252,7 @@ void batched_sparse_matmul_op_32x32_sdd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
+    const   short*      sparse_blocks,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
@@ -265,7 +266,7 @@ void batched_sparse_matmul_op_32x32_sdd(
 
     batched_sparse_matmul_op_32x32_sdd_kernel<<<blocks, threadsPerBlock>>>(
         matrix_a, matrix_b, matrix_c,
-        sparse_table, total_blocks,
+        sparse_blocks, total_blocks,
         total_m, total_n, total_k, trans_a, trans_b
     );
 }
@@ -274,8 +275,8 @@ void batched_sparse_matmul_op_32x32_dsd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
-    const   int*        sparse_table_ptr,
+    const   short*      sparse_blocks,
+    const   int*        sparse_table,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
@@ -292,7 +293,7 @@ void batched_sparse_matmul_op_32x32_dsd(
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
     batched_sparse_matmul_op_32x32_dsd_kernel<<<blocks, threadsPerBlock>>>(
-        matrix_a, matrix_b, matrix_c, sparse_table, sparse_table_ptr,
+        matrix_a, matrix_b, matrix_c, sparse_blocks, sparse_table,
         total_blocks, total_m, total_n, total_k, trans_a, trans_b
     );
 }
@@ -301,8 +302,8 @@ void batched_sparse_matmul_op_32x32_dds(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
-    const   int*        sparse_table_ptr,
+    const   short*      sparse_blocks,
+    const   int*        sparse_table,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
@@ -319,7 +320,7 @@ void batched_sparse_matmul_op_32x32_dds(
     dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
 
     batched_sparse_matmul_op_32x32_dds_kernel<<<blocks, threadsPerBlock>>>(
-        matrix_a, matrix_b, matrix_c, sparse_table, sparse_table_ptr,
+        matrix_a, matrix_b, matrix_c, sparse_blocks, sparse_table,
         total_blocks, total_m, total_n, total_k, trans_a, trans_b
     );
 }

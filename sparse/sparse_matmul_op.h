@@ -3,15 +3,11 @@
 #include <sys/types.h>
 
 
-#define TILE_32x32_WIDTH        32
-#define TILE_32x32_SIZE         (TILE_32x32_WIDTH * TILE_32x32_WIDTH)
-
-
 void batched_sparse_matmul_op_32x32_sdd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
+    const   short*      sparse_blocks,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
@@ -25,8 +21,8 @@ void batched_sparse_matmul_op_32x32_dsd(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
-    const   int*        sparse_table_ptr,
+    const   short*      sparse_blocks,
+    const   int*        sparse_table,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
@@ -40,8 +36,8 @@ void batched_sparse_matmul_op_32x32_dds(
     const   float*      matrix_a,
     const   float*      matrix_b,
             float*      matrix_c,
-    const   short*      sparse_table,
-    const   int*        sparse_table_ptr,
+    const   short*      sparse_blocks,
+    const   int*        sparse_table,
             uint        total_blocks,
             uint        total_batches,
             uint        total_m,
