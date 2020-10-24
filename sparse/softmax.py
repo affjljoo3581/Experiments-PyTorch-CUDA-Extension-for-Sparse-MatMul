@@ -23,6 +23,10 @@ class SparseSoftmax(torch.autograd.Function):
         y = ctx.saved_tensors
         layout = ctx.layout
 
+        # Note that all tensors in sparse operations must be contiguous.
+        if not dy.is_contiguous():
+            dy = dy.contiguous()
+
         return sparse_ops.sparse_softmax_backward(
             y, dy, layout.row_blocks, layout.row_table)
 
