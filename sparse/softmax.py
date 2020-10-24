@@ -16,11 +16,10 @@ class SparseSoftmax(torch.autograd.Function):
 
         return y
 
-
     @staticmethod
     def backward(ctx: Any, dy: torch.Tensor
                  ) -> Tuple[Optional[torch.Tensor], ...]:
-        y = ctx.saved_tensors
+        y = ctx.saved_tensors[0]
         layout = ctx.layout
 
         # Note that all tensors in sparse operations must be contiguous.
