@@ -11,4 +11,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("sparse_softmax_forward",
           &sparse_softmax_forward,
           "Sparse Softmax Activation");
+
+    m.def("sparse_softmax_backward",
+          &sparse_softmax_backward,
+          "Sparse Softmax Activation Backward");
 }

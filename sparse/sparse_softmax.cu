@@ -154,6 +154,56 @@ __global__ void sparse_softmax_32x32_forward_kernel(
     }
 }
 
+/**
+ * Calculate a gradient of input sparse logits matrix from the gradient of
+ * softmax probability matrix.
+ * 
+ * Blocks               : (Batches, Total Rows)
+ * Threads per Block    : (32, 32)
+ */
+
+__global__ void sparse_softmax_32x32_backward_kernel(
+    const   float*  __restrict__    matrix_y,
+    const   float*  __restrict__    matrix_dy,
+            float*  __restrict__    matrix_dx,
+    const   short*  __restrict__    sparse_blocks,
+    const   int*    __restrict__    sparse_table,
+            uint                    total_blocks
+) {
+    uint offset_row = blockIdx.y % TILE_32x32_WIDTH;
+    uint start_block_ptr = sparse_table[blockIdx.y / TILE_32x32_WIDTH];
+    uint end_block_ptr = sparse_table[blockIdx.y / TILE_32x32_WIDTH + 1];
+
+    // Move to the current batch.
+    matrix_y += blockIdx.x * total_blocks * TILE_32x32_SIZE;
+    matrix_dy += blockIdx.x * total_blocks * TILE_32x32_SIZE;
+    matrix_dx += blockIdx.x * total_blocks * TILE_32x32_SIZE;
+
+    // Calculate the multiplication of the softmax probability and its gradient
+    // and get sum of them to compute a gradient of softmax input.
+    uint block_ptr = start_block_ptr + threadIdx.y;
+    for (; block_ptr < end_block_ptr; block_ptr += blockDim.y) {
+        short2 sparse_block = *((short2 *) sparse_blocks + block_ptr);
+        uint idx = sparse_block.x * TILE_32x32_SIZE
+                   + offset_row * TILE_32x32_WIDTH + threadIdx.x;
+
+        matrix_dx[idx] = matrix_dy[idx] * matrix_y[idx];
+    }
+
+    float sum = reduce_sparse_matrix_32x32_row_sum(
+        matrix_dx, sparse_blocks, start_block_ptr, end_block_ptr, offset_row);
+
+    // Compute the gradient of softmax input.
+    block_ptr = start_block_ptr + threadIdx.y;
+    for (; block_ptr < end_block_ptr; block_ptr += blockDim.y) {
+        short2 sparse_block = *((short2 *) sparse_blocks + block_ptr);
+        uint idx = sparse_block.x * TILE_32x32_SIZE
+                   + offset_row * TILE_32x32_WIDTH + threadIdx.x;
+
+        matrix_dx[idx] = (matrix_dy[idx] - sum) * matrix_y[idx];
+    }
+}
+
 
 torch::Tensor sparse_softmax_forward(torch::Tensor x,
                                      torch::Tensor row_blocks,
@@ -178,4 +228,31 @@ torch::Tensor sparse_softmax_forward(torch::Tensor x,
     );
 
     return y.reshape(output_shape);
+}
+
+torch::Tensor sparse_softmax_backward(torch::Tensor y,
+                                      torch::Tensor dy,
+                                      torch::Tensor row_blocks,
+                                      torch::Tensor row_table) {
+    auto output_shape = y.sizes();
+
+    // Merge all batch dimensions to single one and create empty output tensor.
+    y = y.flatten(0, -4);
+    dy = dy.flatten(0, -4);
+    auto dx = torch::empty_like(y);
+
+    // Get the dimension sizes.
+    int64_t total_batches = y.size(0);
+    int64_t total_blocks = row_blocks.size(0) / 2;
+    int64_t total_rows = (row_table.size(0) - 1) * TILE_32x32_WIDTH;
+
+    dim3 blocks(total_batches, total_rows);
+    dim3 threadsPerBlock(TILE_32x32_WIDTH, TILE_32x32_WIDTH);
+
+    sparse_softmax_32x32_backward_kernel<<<blocks, threadsPerBlock>>>(
+        y.data_ptr<float>(), dy.data_ptr<float>(), dx.data_ptr<float>(),
+        row_blocks.data_ptr<short>(), row_table.data_ptr<int>(), total_blocks
+    );
+
+    return dx.reshape(output_shape);
 }

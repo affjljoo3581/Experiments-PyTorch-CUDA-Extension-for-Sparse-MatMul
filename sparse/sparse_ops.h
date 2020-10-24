@@ -21,3 +21,9 @@ torch::Tensor batched_sparse_matmul(torch::Tensor a,
 torch::Tensor sparse_softmax_forward(torch::Tensor x,
                                      torch::Tensor row_blocks,
                                      torch::Tensor row_table);
+
+
+torch::Tensor sparse_softmax_backward(torch::Tensor y,
+                                      torch::Tensor dy,
+                                      torch::Tensor row_blocks,
+                                      torch::Tensor row_table);
