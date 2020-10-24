@@ -215,7 +215,7 @@ __global__ void batched_sparse_matmul_32x32_dds_kernel(
     float accumulator = 0.0f;
     for (; block_ptr < end_block_ptr; block_ptr ++) {
         // Get current sparse-block in corresponding row.
-        short2 sparse_block = *((short2 *) sparse_table + block_ptr);
+        short2 sparse_block = *((short2 *) sparse_blocks + block_ptr);
         uint offset_k = (trans_b
                          ? sparse_block.y % block_stride
                          : sparse_block.y / block_stride) * TILE_32x32_WIDTH;
