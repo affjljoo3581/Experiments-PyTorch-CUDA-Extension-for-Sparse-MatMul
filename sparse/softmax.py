@@ -26,8 +26,9 @@ class SparseSoftmax(torch.autograd.Function):
         if not dy.is_contiguous():
             dy = dy.contiguous()
 
-        return sparse_ops.sparse_softmax_backward(
+        dx = sparse_ops.sparse_softmax_backward(
             y, dy, layout.row_blocks, layout.row_table)
+        return dx, None
 
 
 softmax = SparseSoftmax.apply
