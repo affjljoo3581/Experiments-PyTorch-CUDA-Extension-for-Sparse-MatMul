@@ -28,6 +28,7 @@ class SparseSoftmax(torch.autograd.Function):
 
         dx = sparse_ops.sparse_softmax_backward(
             y, dy, layout.row_blocks, layout.row_table)
+
         return dx, None
 
 

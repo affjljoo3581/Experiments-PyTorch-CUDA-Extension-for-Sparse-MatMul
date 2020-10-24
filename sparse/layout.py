@@ -4,6 +4,9 @@ from typing import Tuple
 
 class SparseLayout:
     def __init__(self, pattern: torch.Tensor):
+        self.pattern = pattern
+        self.sparse_pos = torch.nonzero(pattern, as_tuple=False)
+
         self.row_blocks, self.row_table = \
             self._create_sparse_info(pattern, transpose=False)
         self.col_blocks, self.col_table = \
@@ -39,3 +42,8 @@ class SparseLayout:
         sparse_table = sparse_table.cumsum(0, dtype=torch.int)
 
         return sparse_blocks.cuda(), sparse_table.cuda()
+
+    def make_sparse(self, x: torch.Tensor, block_size: int = 32
+                    ) -> torch.Tensor:
+        return torch.stack([x[..., r:r+block_size, c:c+block_size]
+                            for r, c in self.sparse_pos], dim=-3)
