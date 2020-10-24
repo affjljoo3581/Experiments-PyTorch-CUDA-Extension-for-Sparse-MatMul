@@ -135,8 +135,8 @@ __global__ void batched_sparse_matmul_32x32_dsd_kernel(
 
     // Copy sub-matrices to the shared memory and accumulate tiled matrix
     // multiplication.
-    uint block_ptr = sparse_table[threadIdx.y];
-    uint end_block_ptr = sparse_table[threadIdx.y + 1];
+    uint block_ptr = sparse_table[blockIdx.y];
+    uint end_block_ptr = sparse_table[blockIdx.y + 1];
 
     float accumulator = 0.0f;
     for (; block_ptr < end_block_ptr; block_ptr ++) {
