@@ -5,45 +5,54 @@ from typing import Tuple
 class SparseLayout:
     def __init__(self, pattern: torch.Tensor):
         self.pattern = pattern
-        self.sparse_pos = torch.nonzero(pattern, as_tuple=False)
+        self.sparse_positions = torch.nonzero(pattern, as_tuple=False)
 
-        self.row_blocks, self.row_table = \
-            self._create_sparse_info(pattern, transpose=False)
-        self.col_blocks, self.col_table = \
-            self._create_sparse_info(pattern, transpose=True)
+        # Create sparse layout tensors for CUDA kernel.
+        self.row_layout = self._create_layout(pattern)
+        self.col_layout = self._create_layout(pattern, transpose=True)
 
-    def _create_sparse_info(self,
-                            pattern: torch.Tensor,
-                            transpose: bool = False
-                            ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _create_layout(self, pattern: torch.Tensor, transpose: bool = False
+                       ) -> Tuple[torch.Tensor, torch.Tensor]:
         if transpose:
-            # Get non-zero element indices sorted by column.
-            rows, cols = torch.nonzero(pattern.t(), as_tuple=True)
-            rows, cols = cols, rows
+            cols, rows = torch.nonzero(pattern.t(), as_tuple=True)
         else:
             rows, cols = torch.nonzero(pattern, as_tuple=True)
 
-        # Construct a sparse block information with their indices and
-        # positions.
-        block_pos = rows * pattern.size(1) + cols
-        block_idx = pattern.flatten().cumsum(0).index_select(0, block_pos) - 1
+        # Construct sparse block descriptors with their indices and positions.
+        idx = pattern.flatten().cumsum(0)
+        idx = idx.index_select(0, rows * pattern.size(-1) + cols) - 1
 
-        sparse_blocks = torch.stack((block_idx, block_pos), dim=1)
-        sparse_blocks = sparse_blocks.short().flatten()
+        packed_pos = (rows << 16) + cols
+        blocks = torch.stack((idx, packed_pos), dim=1).int().flatten()
 
-        # Create a sparse table which maps each row to sparse blocks.
-        sparse_table = pattern.new_zeros(
-            pattern.size(1 if transpose else 0) + 1, dtype=torch.int)
+        # Create an offset table containing the offsets of the first block in
+        # each group.
+        table_keys = (cols if transpose else rows) + 1
+        table_values = pattern.new_ones(table_keys.size(0))
 
-        sparse_table.index_add_(
-            dim=0,
-            index=(cols if transpose else rows) + 1,
-            source=torch.ones(rows.size(0), dtype=torch.int))
-        sparse_table = sparse_table.cumsum(0, dtype=torch.int)
+        table_size = pattern.size(1 if transpose else 0) + 1
+        offset_table = (pattern.new_zeros(table_size)
+                        .index_add(0, table_keys, table_values)
+                        .cumsum(0, dtype=torch.int))
 
-        return sparse_blocks.cuda(), sparse_table.cuda()
+        return blocks.cuda(), offset_table.cuda()
 
-    def make_sparse(self, x: torch.Tensor, block_size: int = 32
-                    ) -> torch.Tensor:
-        return torch.stack([x[..., r:r+block_size, c:c+block_size]
-                            for r, c in self.sparse_pos], dim=-3)
+    def to_sparse(self, x: torch.Tensor) -> torch.Tensor:
+        # Split the dense matrix to the sparse blocks and concatenate them.
+        return torch.stack([x[...,
+                              i * 32: (i + 1) * 32,
+                              j * 32: (j + 1) * 32]
+                            for i, j in self.sparse_positions], dim=-3)
+
+    def to_dense(self, x: torch.Tensor) -> torch.Tensor:
+        output = x.new_empty(
+            self.pattern.shape[:-2] + (self.pattern.size(-2) * 32,
+                                       self.pattern.size(-1) * 32))
+
+        # Copy the sparse block data to the dense tensor.
+        for k, (i, j) in enumerate(self.sparse_positions):
+            output[...,
+                   i * 32: (i + 1) * 32,
+                   j * 32: (j + 1) * 32] = x[..., k, :, :]
+
+        return output

@@ -6,65 +6,52 @@ from typing import Any, Tuple, Optional
 
 class SparseMatMul(torch.autograd.Function):
     @staticmethod
-    def forward(ctx: Any,
-                a: torch.Tensor,
-                b: torch.Tensor,
-                mode: str,
-                layout: SparseLayout,
-                trans_a: bool = False,
-                trans_b: bool = False) -> torch.Tensor:
+    def forward(ctx: Any, a: torch.Tensor, b: torch.Tensor,
+                mode: str, layout: SparseLayout,
+                trans_a: bool = False, trans_b: bool = False) -> torch.Tensor:
         ctx.save_for_backward(a, b)
         ctx.mode, ctx.layout = mode, layout
         ctx.trans_a, ctx.trans_b = trans_a, trans_b
 
-        return sparse_ops.batched_sparse_matmul(
-            a, b, mode,
-            layout.row_blocks, layout.row_table,
-            layout.col_blocks, layout.col_table,
-            trans_a, trans_b)
+        return sparse_ops.sparse_matmul(a, b, mode,
+                                        layout.row_layout, layout.col_layout,
+                                        trans_a, trans_b)
 
     @staticmethod
     def backward(ctx: Any, dc: torch.Tensor
                  ) -> Tuple[Optional[torch.Tensor], ...]:
+        # Note that all tensors in sparse matmul op should be contiguous.
+        da, db, dc = None, None, dc.contiguous()
+
         a, b = ctx.saved_tensors
         mode, layout = ctx.mode, ctx.layout
         trans_a, trans_b = ctx.trans_a, ctx.trans_b
 
-        # Note that all tensors in sparse operations must be contiguous.
-        if not dc.is_contiguous():
-            dc = dc.contiguous()
-
-        da, db = None, None
-
         if ctx.needs_input_grad[0]:
             if trans_a:
-                da = sparse_ops.batched_sparse_matmul(
-                    b, dc, mode[1] + mode[2] + mode[0],
-                    layout.row_blocks, layout.row_table,
-                    layout.col_blocks, layout.col_table,
-                    trans_b, True)
+                da_mode = mode[1] + mode[2] + mode[0]
             else:
-                da = sparse_ops.batched_sparse_matmul(
-                    dc, b, mode[1] + mode[0] + mode[2],
-                    layout.row_blocks, layout.row_table,
-                    layout.col_blocks, layout.col_table,
-                    False, not trans_b)
+                da_mode = mode[1] + mode[0] + mode[2]
+
+            da = sparse_ops.sparse_matmul(
+                dc if trans_a else b, b if trans_a else dc, da_mode,
+                layout.row_layout, layout.col_layout,
+                trans_a and trans_b, trans_a or not trans_b)
 
         if ctx.needs_input_grad[1]:
             if trans_b:
-                db = sparse_ops.batched_sparse_matmul(
-                    dc, a, mode[2] + mode[0] + mode[1],
-                    layout.row_blocks, layout.row_table,
-                    layout.col_blocks, layout.col_table,
-                    True, trans_a)
+                db_mode = mode[2] + mode[0] + mode[1]
             else:
-                db = sparse_ops.batched_sparse_matmul(
-                    a, dc, mode[2] + mode[1] + mode[0],
-                    layout.row_blocks, layout.row_table,
-                    layout.col_blocks, layout.col_table,
-                    not trans_a, False)
+                db_mode = mode[2] + mode[1] + mode[0]
+
+            db = sparse_ops.sparse_matmul(
+                dc if trans_b else a, a if trans_a else dc, db_mode,
+                layout.row_layout, layout.col_layout,
+                trans_b or not trans_a, trans_a and trans_b)
 
         return da, db, None, None, None, None
 
 
+# Use sparse matmul op by calling this method, instead of using `SparseMatMul`
+# class directly.
 matmul = SparseMatMul.apply
