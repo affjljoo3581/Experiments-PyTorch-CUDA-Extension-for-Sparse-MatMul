@@ -34,7 +34,7 @@ class SparseMatMul(torch.autograd.Function):
                 da_mode = mode[1] + mode[0] + mode[2]
 
             da = sparse_ops.sparse_matmul(
-                dc if trans_a else b, b if trans_a else dc, da_mode,
+                b if trans_a else dc, dc if trans_a else b, da_mode,
                 layout.row_layout, layout.col_layout,
                 trans_a and trans_b, trans_a or not trans_b)
 
@@ -47,7 +47,7 @@ class SparseMatMul(torch.autograd.Function):
             db = sparse_ops.sparse_matmul(
                 dc if trans_b else a, a if trans_a else dc, db_mode,
                 layout.row_layout, layout.col_layout,
-                trans_b or not trans_a, trans_a and trans_b)
+                not trans_a or trans_b, trans_a and trans_b)
 
         return da, db, None, None, None, None
 

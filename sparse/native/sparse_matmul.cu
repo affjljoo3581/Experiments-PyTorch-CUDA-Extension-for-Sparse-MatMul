@@ -20,9 +20,10 @@ __device__ __forceinline__ void load_matrix_sync(
           float* __restrict__ dst,
     uint stride_src, uint stride_dst, bool transpose
 ) {
-    uint offset_dst = !transpose ? threadIdx.y * stride_dst + threadIdx.x
-                                 : threadIdx.x * stride_dst + threadIdx.y;
+    uint offset_dst = transpose ? threadIdx.x * stride_dst + threadIdx.y
+                                : threadIdx.y * stride_dst + threadIdx.x;
     dst[offset_dst] = src[threadIdx.y * stride_src + threadIdx.x];
+    __syncthreads();
 }
 
 /**
@@ -61,18 +62,18 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
 
         load_matrix_sync(matrix_a + offset_a, (float *) tile_a,
                          trans_a ? size_m : size_k, TILE_32x32_WIDTH + 1,
-                         trans_a);        
+                         trans_a);
         load_matrix_sync(matrix_b + offset_b, (float *) tile_b,
                          trans_b ? size_k : size_n, TILE_32x32_WIDTH + 1,
                          trans_b);
 
         // Accumulate the tiled matrix multiplications.
-        for (uint i = 0; i < TILE_32x32_SIZE; i ++)
+        for (uint i = 0; i < TILE_32x32_WIDTH; i ++)
             accumulator += tile_a[threadIdx.y][i] * tile_b[i][threadIdx.x];
         __syncthreads();
     }
 
-    matrix_c[m * TILE_32x32_WIDTH + n] = accumulator;
+    matrix_c[threadIdx.y * TILE_32x32_WIDTH + threadIdx.x] = accumulator;
 }
 
 /**
@@ -150,8 +151,8 @@ __global__ void sparse_matmul_dds_32x32_kernel(
     uint n = blockIdx.z * TILE_32x32_WIDTH;
 
     // Move to the current batch.
-    matrix_a += blockIdx.x * num_blocks * TILE_32x32_SIZE;
-    matrix_b += blockIdx.x * size_k * size_n;
+    matrix_a += blockIdx.x * size_m * size_k;
+    matrix_b += blockIdx.x * num_blocks * TILE_32x32_SIZE;
     matrix_c += blockIdx.x * size_m * size_n;
 
     float accumulator = 0.0f;

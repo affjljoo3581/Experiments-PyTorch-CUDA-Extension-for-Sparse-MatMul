@@ -45,9 +45,8 @@ class SparseLayout:
                             for i, j in self.sparse_positions], dim=-3)
 
     def to_dense(self, x: torch.Tensor) -> torch.Tensor:
-        output = x.new_empty(
-            self.pattern.shape[:-2] + (self.pattern.size(-2) * 32,
-                                       self.pattern.size(-1) * 32))
+        output = x.new_empty(x.shape[:-3] + (self.pattern.size(-2) * 32,
+                                             self.pattern.size(-1) * 32))
 
         # Copy the sparse block data to the dense tensor.
         for k, (i, j) in enumerate(self.sparse_positions):
