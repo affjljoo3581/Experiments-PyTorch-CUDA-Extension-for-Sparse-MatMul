@@ -199,10 +199,12 @@ torch::Tensor sparse_matmul(
                                        : a.size(trans_a ? -2 : -1);
 
     // Construct output tensor shape with preserving multiple batch dimensions.
-    auto shape = (mode.at(1) == 'd' ? a : b).sizes().vec();
-    if (mode.at(0) == 'd') shape.insert(shape.end() - 2, { size_m, size_n });
-    else shape.insert(shape.end() - 2, { num_blocks,
-                                         TILE_32x32_WIDTH, TILE_32x32_WIDTH });
+    auto dense = mode.at(1) == 'd' ? a : b;
+    auto shape = dense.sizes().slice(0, dense.dim() - 2).vec();
+
+    if (mode.at(0) == 'd') shape.insert(shape.end(), { size_m, size_n });
+    else shape.insert(shape.end(), { num_blocks,
+                                     TILE_32x32_WIDTH, TILE_32x32_WIDTH });
 
     // Merge the batch dimensions to one.
     a = a.flatten(0, mode.at(1) == 'd' ? -3 : -4);
