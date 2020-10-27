@@ -46,6 +46,10 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
     __shared__ float tile_a[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
     __shared__ float tile_b[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
 
+    float row_a[TILE_32x32_WIDTH];
+    float col_b[TILE_32x32_WIDTH];
+
+    // Fecth current block and get row and column index.
     auto block = layout.blocks[blockIdx.x];
     uint m = block.row() * TILE_32x32_WIDTH;
     uint n = block.col() * TILE_32x32_WIDTH;
@@ -57,6 +61,7 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
 
     float accumulator = 0.0f;
     for (uint k = 0; k < size_k; k += TILE_32x32_WIDTH) {
+        // Load matrix tile from global memories to the shared memories.
         uint offset_a = trans_a ? k * size_m + m : m * size_k + k;
         uint offset_b = trans_b ? n * size_k + k : k * size_n + n;
 
@@ -65,12 +70,20 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
                          trans_a);
         load_matrix_sync(matrix_b + offset_b, (float *) tile_b,
                          trans_b ? size_k : size_n, TILE_32x32_WIDTH + 1,
-                         trans_b);
+                         !trans_b);
+
+        // Load corresponding row and column vectors from shared memory to the
+        // local register file.
+        #pragma unroll
+        for (uint i = 0; i < 8; i ++) {
+            *((float4 *) row_a + i) = *((float4 *) &tile_a[threadIdx.y][i * 4]);
+            *((float4 *) col_b + i) = *((float4 *) &tile_b[threadIdx.x][i * 4]);
+        }
 
         // Accumulate the tiled matrix multiplications.
+        #pragma unroll
         for (uint i = 0; i < TILE_32x32_WIDTH; i ++)
-            accumulator += tile_a[threadIdx.y][i] * tile_b[i][threadIdx.x];
-        __syncthreads();
+            accumulator += row_a[i] * col_b[i];
     }
 
     matrix_c[threadIdx.y * TILE_32x32_WIDTH + threadIdx.x] = accumulator;
@@ -93,6 +106,8 @@ __global__ void sparse_matmul_dsd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    __shared__ int32_t shared_layout[MAX_ROW_BLOCKS * 2];
+
     __shared__ float tile_a[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
     __shared__ float tile_b[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
 
@@ -105,7 +120,9 @@ __global__ void sparse_matmul_dsd_32x32_kernel(
     matrix_c += blockIdx.x * size_m * size_n;
 
     float accumulator = 0.0f;
-    for (auto desc = layout.begin(blockIdx.y); desc.valid(); desc.next()) {
+
+    auto desc = layout.begin(blockIdx.y, (int32_t *) shared_layout);
+    for (; desc.valid(); desc.next()) {
         auto block = *desc;
         uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
@@ -144,6 +161,8 @@ __global__ void sparse_matmul_dds_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    __shared__ int32_t shared_layout[MAX_ROW_BLOCKS * 2];
+
     __shared__ float tile_a[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
     __shared__ float tile_b[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
 
@@ -156,7 +175,9 @@ __global__ void sparse_matmul_dds_32x32_kernel(
     matrix_c += blockIdx.x * size_m * size_n;
 
     float accumulator = 0.0f;
-    for (auto desc = layout.begin(blockIdx.z); desc.valid(); desc.next()) {
+
+    auto desc = layout.begin(blockIdx.y, shared_layout);
+    for (; desc.valid(); desc.next()) {
         auto block = *desc;
         uint k = (trans_b ? block.col() : block.row()) * TILE_32x32_WIDTH;
 
