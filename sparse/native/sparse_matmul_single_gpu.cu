@@ -87,7 +87,7 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     __shared__ tile_storage tile_a, tile_b;
 
     tile_loader loader_a(matrix_a + blockIdx.y * size_m * size_k,
-                         tile_a, trans_a ? size_m : size_k, !trans_a);
+                         tile_a, trans_a ? size_k : size_m, !trans_a);
     tile_loader loader_b(matrix_b + blockIdx.y * size_k * size_n,
                          tile_b, trans_b ? size_k : size_n, trans_b);
 
