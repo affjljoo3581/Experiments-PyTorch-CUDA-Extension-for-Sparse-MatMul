@@ -99,22 +99,21 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
     loader_b.prefetch(trans_a ? n : 0, trans_a ? 0 : n);
-    __syncthreads();
 
     float accumulator[4] = { 0.0f, };
     for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
-        uint k_iter = k / tile_storage::ROWS;
+        uint page = k / tile_storage::ROWS % 2;
         uint next_k = k + tile_storage::ROWS;
 
         // Move the prefetched global memory values to the shared memory.
-        loader_a.commit(k_iter % 2);
-        loader_b.commit(k_iter % 2);
+        loader_a.commit(page);
+        loader_b.commit(page);
         __syncthreads();
 
         // Prefetch the next tiles from the global memory.
         if (next_k < size_k) {
             loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
-            loader_b.prefetch(trans_a ? n : next_k, trans_a ? next_k : n);
+            loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
@@ -125,8 +124,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[0] = tile_a.get(k_iter % 2, i, warp_idx * 4 + 0);
-            local_b = tile_b.get(k_iter % 2, i, lane_idx);
+                local_a[0] = tile_a.get(page, i, warp_idx * 4 + j);
+            local_b = tile_b.get(page, i, lane_idx);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
