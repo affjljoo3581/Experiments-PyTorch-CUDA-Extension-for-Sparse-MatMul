@@ -98,7 +98,7 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
-    loader_b.prefetch(trans_a ? n : 0, trans_a ? 0 : n);
+    loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
 
     float accumulator[4] = { 0.0f, };
     for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
