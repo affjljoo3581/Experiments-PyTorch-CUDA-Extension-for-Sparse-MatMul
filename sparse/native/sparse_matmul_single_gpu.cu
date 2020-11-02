@@ -45,11 +45,6 @@ public:
         }
     }
 
-    __device__ __forceinline__ void fetch(uint page, uint row, uint col) {
-        prefetch(row, col);
-        commit(page);
-    }
-
     __device__ __forceinline__ void prefetch(uint row, uint col) {
         buffer = src[(row + from.y) * stride + (col + from.x)];    
     }
@@ -104,6 +99,7 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
     loader_b.prefetch(trans_a ? n : 0, trans_a ? 0 : n);
+    __syncthreads();
 
     float accumulator[4] = { 0.0f, };
     for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
@@ -148,13 +144,13 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
 torch::Tensor sparse_matmul_single(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
-    const layout_tensors& row_layout, const layout_tensors& column_layout,
+    const layout_tensors& row_layout, const layout_tensors& col_layout,
     bool trans_a, bool trans_b
 ) {
     // Select current sparse layout by the given sparse mode.
     auto layout = (mode == "sdd"
                    || mode == "dsd" && !trans_a
-                   || mode == "dds" && trans_b) ? row_layout : column_layout;
+                   || mode == "dds" && trans_b) ? row_layout : col_layout;
     int64_t num_blocks = std::get<0>(layout).size(0) / 2;
     int64_t sparse_width = (std::get<1>(layout).size(0) - 1) * TILE_32x32_WIDTH;
 
