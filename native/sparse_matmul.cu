@@ -43,6 +43,7 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    // Define shared memories and register files.
     __shared__ float tile_a[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
     __shared__ float tile_b[TILE_32x32_WIDTH][TILE_32x32_WIDTH + 1];
 
@@ -73,14 +74,15 @@ __global__ void sparse_matmul_sdd_32x32_kernel(
                          !trans_b);
 
         // Load corresponding row and column vectors from shared memory to the
-        // local register file.
+        // local register files.
         #pragma unroll
         for (uint i = 0; i < 8; i ++) {
             *((float4 *) row_a + i) = *((float4 *) &tile_a[threadIdx.y][i * 4]);
             *((float4 *) col_b + i) = *((float4 *) &tile_b[threadIdx.x][i * 4]);
         }
+        __syncthreads();
 
-        // Accumulate the tiled matrix multiplications.
+        // Accumulate the tiled matrix multiplications by using the registers.
         #pragma unroll
         for (uint i = 0; i < TILE_32x32_WIDTH; i ++)
             accumulator += row_a[i] * col_b[i];
@@ -205,14 +207,14 @@ torch::Tensor sparse_matmul(
     const layout_tensors& row_layout, const layout_tensors& col_layout,
     bool trans_a, bool trans_b
 ) {
-    // Select current sparse layout.
+    // Select current sparse layout by the given sparse matmul mode.
     auto layout = (mode == "ssd"
                    || mode == "dsd" && !trans_a
                    || mode == "dds" && trans_b) ? row_layout : col_layout;
     int64_t num_blocks = std::get<0>(layout).size(0) / 2;
     int64_t sparse_width = (std::get<1>(layout).size(0) - 1) * TILE_32x32_WIDTH;
 
-    // Get the dimension sizes from the tensors and corresponding sparse mode.
+    // Get the dimension sizes from the tensors.
     int64_t size_m = mode.at(1) == 'd' ? a.size(trans_a ? -1 : -2)
                                        : sparse_width;
     int64_t size_n = mode.at(2) == 'd' ? b.size(trans_b ? -2 : -1)
