@@ -140,7 +140,7 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
-        matrix_c[block.idx() * TILE_32x32_SIZE
+        matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
                  + (warp_idx * 4 + i) * TILE_32x32_WIDTH
                  + lane_idx] = accumulator[i];
 }
