@@ -36,23 +36,21 @@ public:
     {
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
-        /*
+
         if (trans) {
             from.x = to.y = x % tile_storage::ROWS;
             from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
         } else {
             from = to = { x, y };
-        }*/
+        }
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
-        //buffer = src[(row + from.y) * stride + (col + from.x)];
-        buffer = src[(row + 0) * stride + (col + 0)];
+        buffer = src[(row + from.y) * stride + (col + from.x)];
     }
 
     __device__ __forceinline__ void commit(uint page) {
-        //storage.get(page, to.y, to.x) = buffer;
-        storage.get(page, 0, 0) = buffer;
+        storage.get(page, to.y, to.x) = buffer;
     }
 private:
     const float* __restrict__ src;
@@ -61,7 +59,7 @@ private:
     tile_storage& storage;
     float buffer;
 
-    //uint2 from, to;
+    uint2 from, to;
 };
 
 
@@ -82,8 +80,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    uint lane_idx = threadIdx.x % 32;
-    uint warp_idx = threadIdx.x / 32;
+    const uint lane_idx = threadIdx.x % 32;
+    const uint warp_idx = threadIdx.x / 32;
 
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
@@ -95,8 +93,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
-    uint m = block.row() * TILE_32x32_WIDTH;
-    uint n = block.col() * TILE_32x32_WIDTH;
+    const uint m = block.row() * TILE_32x32_WIDTH;
+    const uint n = block.col() * TILE_32x32_WIDTH;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
