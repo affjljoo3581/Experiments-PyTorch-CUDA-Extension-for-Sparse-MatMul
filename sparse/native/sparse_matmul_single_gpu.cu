@@ -96,6 +96,13 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint m = block.row() * TILE_32x32_WIDTH;
     uint n = block.col() * TILE_32x32_WIDTH;
 
+
+    asm("mov.b32 %0, %0;" : "+r"(lane_idx)  : );
+    asm("mov.b32 %0, %0;" : "+r"(warp_idx)  : );
+    asm("mov.b32 %0, %0;" : "+r"(m)         : );
+    asm("mov.b32 %0, %0;" : "+r"(n)         : );
+
+
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
