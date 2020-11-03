@@ -101,6 +101,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
 
     float accumulator[4] = { 0.0f, };
+
+    #pragma unroll 1
     for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
         uint page = k / tile_storage::ROWS % 2;
         uint next_k = k + tile_storage::ROWS;
