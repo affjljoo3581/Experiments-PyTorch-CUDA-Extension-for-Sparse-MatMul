@@ -36,21 +36,23 @@ public:
     {
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
-
+        /*
         if (trans) {
             from.x = to.y = x % tile_storage::ROWS;
             from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
         } else {
             from = to = { x, y };
-        }
+        }*/
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
-        buffer = src[(row + from.y) * stride + (col + from.x)];    
+        //buffer = src[(row + from.y) * stride + (col + from.x)];
+        buffer = src[(row + 0) * stride + (col + 0)];
     }
 
     __device__ __forceinline__ void commit(uint page) {
-        storage.get(page, to.y, to.x) = buffer;
+        //storage.get(page, to.y, to.x) = buffer;
+        storage.get(page, 0, 0) = buffer;
     }
 private:
     const float* __restrict__ src;
@@ -59,7 +61,7 @@ private:
     tile_storage& storage;
     float buffer;
 
-    uint2 from, to;
+    //uint2 from, to;
 };
 
 
@@ -80,6 +82,9 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    uint lane_idx = threadIdx.x % 32;
+    uint warp_idx = threadIdx.x / 32;
+
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
 
@@ -117,9 +122,6 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
         // vectors from shared memory to local register files.
         #pragma unroll
         for (uint i = 0; i < tile_storage::ROWS; ++ i) {
-            uint lane_idx = threadIdx.x % 32;
-            uint warp_idx = threadIdx.x / 32;
-
             float local_a[4], local_b;
 
             #pragma unroll
