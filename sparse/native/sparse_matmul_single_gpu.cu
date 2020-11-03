@@ -80,9 +80,6 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    uint lane_idx = threadIdx.x % 32;
-    uint warp_idx = threadIdx.x / 32;
-
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
 
@@ -127,6 +124,9 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
         // vectors from shared memory to local register files.
         #pragma unroll
         for (uint i = 0; i < tile_storage::ROWS; ++ i) {
+            uint lane_idx = threadIdx.x % 32;
+            uint warp_idx = threadIdx.x / 32;
+
             float local_a[4], local_b;
 
             #pragma unroll
