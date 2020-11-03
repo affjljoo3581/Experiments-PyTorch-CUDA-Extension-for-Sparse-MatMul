@@ -80,8 +80,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    const uint lane_idx = threadIdx.x % 32;
-    const uint warp_idx = threadIdx.x / 32;
+    volatile uint lane_idx = threadIdx.x % 32;
+    volatile uint warp_idx = threadIdx.x / 32;
 
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
@@ -93,8 +93,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
-    const uint m = block.row() * TILE_32x32_WIDTH;
-    const uint n = block.col() * TILE_32x32_WIDTH;
+    volatile uint m = block.row() * TILE_32x32_WIDTH;
+    volatile uint n = block.col() * TILE_32x32_WIDTH;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
