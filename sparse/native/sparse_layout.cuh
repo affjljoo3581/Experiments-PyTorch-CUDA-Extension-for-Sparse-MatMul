@@ -28,7 +28,7 @@ public:
     __device__ __forceinline__ void next() { ++ current; }
     __device__ __forceinline__ bool valid() { return current < end; }
     __device__ __forceinline__ const block_desc& operator*() {
-        return base[current];
+        return __ldg(&base[current]);
     }
 private:
     const block_desc* __restrict__ base;
@@ -47,11 +47,11 @@ public:
         : sparse_layout(std::get<0>(layout), std::get<1>(layout)) {}
 
     __device__ __forceinline__ sparse_iterator begin(uint i) {
-        return { blocks, offset_table[i], offset_table[i + 1] };
+        return { blocks, __ldg(&offset_table[i]), __ldg(&offset_table[i + 1]) };
     }
 
     __device__ __forceinline__ const block_desc& get(uint i) {
-        return blocks[i];
+        return __ldg(&blocks[i]);
     }
 private:
     const block_desc* __restrict__ blocks;
