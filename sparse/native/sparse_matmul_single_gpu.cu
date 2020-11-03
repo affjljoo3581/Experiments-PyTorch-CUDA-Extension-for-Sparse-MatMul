@@ -46,7 +46,7 @@ public:
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
-        buffer = src[(row + from.y) * stride + (col + from.x)];    
+        buffer = __ldg(&src[(row + from.y) * stride + (col + from.x)]);    
     }
 
     __device__ __forceinline__ void commit(uint page) {
