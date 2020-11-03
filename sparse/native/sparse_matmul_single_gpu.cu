@@ -133,12 +133,6 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
         }
     }
 
-    asm volatile ("mov.u32 %0, %tid.x;"   : "=r"(tid  )  :);
-    asm volatile ("mov.u32 %0, %ctaid.x;" : "=r"(idx_MN) :);
-    asm volatile ("mov.u32 %0, %ctaid.y;" : "=r"(idx_B)  :);
-    asm volatile ("mov.u32 %0, %ctaid.z;" : "=r"(idx_H)  :);
-
-
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
