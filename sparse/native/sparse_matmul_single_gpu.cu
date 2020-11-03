@@ -80,9 +80,6 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    volatile uint lane_idx = threadIdx.x % 32;
-    volatile uint warp_idx = threadIdx.x / 32;
-
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
 
@@ -93,8 +90,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
-    volatile uint m = block.row() * TILE_32x32_WIDTH;
-    volatile uint n = block.col() * TILE_32x32_WIDTH;
+    uint m = block.row() * TILE_32x32_WIDTH;
+    uint n = block.col() * TILE_32x32_WIDTH;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
@@ -124,8 +121,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
-            local_b = tile_b.get(page, i, lane_idx);
+                local_a[j] = tile_a.get(page, i, (threadIdx.x / 32) * 4 + j);
+            local_b = tile_b.get(page, i, threadIdx.x % 32);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
@@ -136,8 +133,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
-                 + (warp_idx * 4 + i) * TILE_32x32_WIDTH
-                 + lane_idx] = accumulator[i];
+                 + ((threadIdx.x / 32) * 4 + i) * TILE_32x32_WIDTH
+                 + (threadIdx.x % 32)] = accumulator[i];
 }
 
 
