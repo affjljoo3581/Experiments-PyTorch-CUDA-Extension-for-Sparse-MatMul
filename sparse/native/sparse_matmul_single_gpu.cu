@@ -32,23 +32,25 @@ public:
     __device__ __forceinline__ tile_loader(const float* __restrict__ src,
                                            tile_storage& storage,
                                            uint stride, bool trans)
-        : src(src), storage(storage), stride(stride), trans(trans)
+        : src(src), storage(storage), stride(stride)
     {
-        x = threadIdx.x % tile_storage::COLUMNS;
-        y = threadIdx.x / tile_storage::COLUMNS;
+        uint x = threadIdx.x % tile_storage::COLUMNS;
+        uint y = threadIdx.x / tile_storage::COLUMNS;
 
         if (trans) {
-            y = x / tile_storage::ROWS * tile_storage::ROWS + y;
-            x = x % tile_storage::ROWS;
+            from.x = to.y = x % tile_storage::ROWS;
+            from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
+        } else {
+            from = to = { x, y };
         }
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
-        buffer = src[(row + y) * stride + (col + x)];
+        buffer = src[(row + from.y) * stride + (col + from.x)];
     }
 
     __device__ __forceinline__ void commit(uint page) {
-        storage.get(page, trans ? x : y, trans ? y : x) = buffer;
+        storage.get(page, to.y, to.x) = buffer;
     }
 private:
     const float* __restrict__ src;
@@ -57,8 +59,7 @@ private:
     tile_storage& storage;
     float buffer;
 
-    bool trans;
-    uint x, y;
+    uint2 from, to;
 };
 
 
@@ -71,7 +72,7 @@ private:
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256
  */
-__global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
+__global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
@@ -131,6 +132,12 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
                 accumulator[j] += local_a[j] * local_b;
         }
     }
+
+    asm volatile ("mov.u32 %0, %tid.x;"   : "=r"(tid  )  :);
+    asm volatile ("mov.u32 %0, %ctaid.x;" : "=r"(idx_MN) :);
+    asm volatile ("mov.u32 %0, %ctaid.y;" : "=r"(idx_B)  :);
+    asm volatile ("mov.u32 %0, %ctaid.z;" : "=r"(idx_H)  :);
+
 
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
