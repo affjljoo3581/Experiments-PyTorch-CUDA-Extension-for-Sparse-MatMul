@@ -50,25 +50,26 @@ public:
     __device__ __forceinline__ void prefetch(uint row, uint col) {
         //buffer = src[(row + from.y) * stride + (col + from.x)];
 
-        uint x = threadIdx.x % tile_storage::COLUMNS;
-        uint y = threadIdx.x / tile_storage::COLUMNS;
+        uint2 idx = { threadIdx.x % tile_storage::COLUMNS,
+                      threadIdx.x / tile_storage::COLUMNS };
 
         if (trans)
-            buffer = src[(row + x / tile_storage::ROWS * tile_storage::ROWS + y) * stride + (col + x % tile_storage::ROWS)];
-        else
-            buffer = src[(row + y) * stride + (col + x)];
+            idx = { idx.x % tile_storage::ROWS, idx.x / tile_storage::ROWS * tile_storage::ROWS + idx.y };
+
+        buffer = src[(row + idx.y) * stride + (col + idx.x)];
     }
 
     __device__ __forceinline__ void commit(uint page) {
         //storage.get(page, to.y, to.x) = buffer;
 
-        uint x = threadIdx.x % tile_storage::COLUMNS;
-        uint y = threadIdx.x / tile_storage::COLUMNS;
+        uint2 idx = { threadIdx.x % tile_storage::COLUMNS,
+                      threadIdx.x / tile_storage::COLUMNS };
 
         if (trans)
-            storage.get(page, x % tile_storage::ROWS, x / tile_storage::ROWS * tile_storage::ROWS + y) = buffer;
-        else
-            storage.get(page, y, x) = buffer;
+            idx = { idx.x / tile_storage::ROWS * tile_storage::ROWS + idx.y,
+                    idx.x % tile_storage::ROWS };
+
+        storage.get(page, idx.y, idx.x) = buffer;
     }
 private:
     const float* __restrict__ src;
