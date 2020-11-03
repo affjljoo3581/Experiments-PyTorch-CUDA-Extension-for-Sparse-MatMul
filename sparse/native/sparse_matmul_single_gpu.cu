@@ -32,8 +32,9 @@ public:
     __device__ __forceinline__ tile_loader(const float* __restrict__ src,
                                            tile_storage& storage,
                                            uint stride, bool trans)
-        : src(src), storage(storage), stride(stride)
+        : src(src), storage(storage), stride(stride), trans(trans)
     {
+        /*
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
 
@@ -43,14 +44,31 @@ public:
         } else {
             from = to = { x, y };
         }
+        */
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
-        buffer = src[(row + from.y) * stride + (col + from.x)];
+        //buffer = src[(row + from.y) * stride + (col + from.x)];
+
+        uint x = threadIdx.x % tile_storage::COLUMNS;
+        uint y = threadIdx.x / tile_storage::COLUMNS;
+
+        if (trans)
+            buffer = src[(row + x / tile_storage::ROWS * tile_storage::ROWS + y) * stride + (col + x % tile_storage::ROWS)];
+        else
+            buffer = src[(row + y) * stride + (col + x)];
     }
 
     __device__ __forceinline__ void commit(uint page) {
-        storage.get(page, to.y, to.x) = buffer;
+        //storage.get(page, to.y, to.x) = buffer;
+
+        uint x = threadIdx.x % tile_storage::COLUMNS;
+        uint y = threadIdx.x / tile_storage::COLUMNS;
+
+        if (trans)
+            storage.get(page, x % tile_storage::ROWS, x / tile_storage::ROWS * tile_storage::ROWS + y) = buffer;
+        else
+            storage.get(page, y, x) = buffer;
     }
 private:
     const float* __restrict__ src;
@@ -59,7 +77,9 @@ private:
     tile_storage& storage;
     float buffer;
 
-    uint2 from, to;
+    bool trans;
+
+    //uint2 from, to;
 };
 
 
@@ -80,6 +100,9 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    uint lane_idx = threadIdx.x % 32;
+    uint warp_idx = threadIdx.x / 32;
+
     // Define shared tile storages and tile loaders.
     __shared__ tile_storage tile_a, tile_b;
 
@@ -121,8 +144,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, i, (threadIdx.x / 32) * 4 + j);
-            local_b = tile_b.get(page, i, threadIdx.x % 32);
+                local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
+            local_b = tile_b.get(page, i, lane_idx);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
@@ -133,8 +156,8 @@ __global__ void __launch_bounds__(256) sparse_matmul_single_sdd_32x32_kernel(
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
-                 + ((threadIdx.x / 32) * 4 + i) * TILE_32x32_WIDTH
-                 + (threadIdx.x % 32)] = accumulator[i];
+                 + (warp_idx * 4 + i) * TILE_32x32_WIDTH
+                 + lane_idx] = accumulator[i];
 }
 
 
