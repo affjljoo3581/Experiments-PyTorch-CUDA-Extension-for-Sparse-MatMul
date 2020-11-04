@@ -177,14 +177,14 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
     auto iter = layout.begin(blockIdx.y);
     float accumulator[4] = { 0.0f, };
 
-    if (!iter.valid()) return;
-
     // Prefetch first tiles from the global memory.
-    auto block = *iter;
-    uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
+    if (iter.valid()) {
+        auto block = *iter;
+        uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
-    loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
-    loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
+        loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
+        loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
+    }
 
     #pragma unroll 1
     for (uint loop = 0; iter.valid(); ++ loop) {
@@ -196,8 +196,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         // Prefetch the next tiles from the global memory.
         iter.next();
         if (iter.valid()) {
-            block = *iter;
-            k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
+            auto block = *iter;
+            uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
             loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
             loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
