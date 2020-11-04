@@ -177,6 +177,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
     auto iter = layout.begin(blockIdx.y);
     float accumulator[4] = { 0.0f, };
 
+    if (!iter.valid()) return;
+
     // Prefetch first tiles from the global memory.
     auto block = *iter;
     uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
