@@ -183,7 +183,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
         //loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
-        //loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
+        loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
     }
 
 
@@ -201,7 +201,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
             uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
             //loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
-            //loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
+            loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
@@ -221,13 +221,11 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         }
     }
 
-    /*
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[blockIdx.x * size_m * size_n
                  + (m + warp_idx * 4 + i) * size_n
                  + (n + lane_idx)] = accumulator[i];
-    */
 }
 
 
