@@ -174,48 +174,61 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
     tile_loader loader_b(matrix_b + blockIdx.x * size_k * size_n,
                          tile_b, trans_b ? size_k : size_n, trans_b);
 
+    // Get an iterator of block descriptors and load the first block.
+    auto iter = layout.begin(blockIdx.y);
+    if (!iter.valid()) return;
+
+    auto block = *iter;
+    uint base_k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
+
+    // Prefetch first tiles from the global memory.
+    loader_a.prefetch(block.idx() * TILE_32x32_WIDTH, 0);
+    loader_b.prefetch(trans_b ? n : base_k, trans_b ? base_k : n);
+
     float accumulator[4] = { 0.0f, };
 
     #pragma unroll 1
-    for(auto iter = layout.begin(blockIdx.y); iter.valid(); iter.next()) {
-        auto block = *iter;
-        uint base_k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
+    for (uint k = 0; iter.valid(); k += tile_storage::ROWS) {
+        uint page = k / tile_storage::ROWS % 2;
 
-        // Prefetch first tiles from the global memory.
-        loader_a.prefetch(block.idx() * TILE_32x32_WIDTH, 0);
-        loader_b.prefetch(trans_b ? n : base_k, trans_b ? base_k : n);
+        // Load next block from the layout.
+        if (k == TILE_32x32_WIDTH) {
+            k = 0;
+            iter.next();
 
-        for (uint k = 0; k < TILE_32x32_WIDTH; k += tile_storage::ROWS) {
-            uint page = k / tile_storage::ROWS % 2;
-            uint next_k = k + tile_storage::ROWS;
-
-            // Move the prefetched global memory values to the shared memory.
-            loader_a.commit(page);
-            loader_b.commit(page);
-            __syncthreads();
-
-            // Prefetch the next tiles from the global memory.
-            if (next_k < TILE_32x32_WIDTH) {
-                loader_a.prefetch(block.idx() * TILE_32x32_WIDTH + k, 0);
-                loader_b.prefetch(trans_b ? n : base_k + k,
-                                  trans_b ? base_k + k : n);
+            if (iter.valid()) {
+                block = *iter;
+                base_k = (trans_a ? block.row()
+                                  : block.col()) * TILE_32x32_WIDTH;
             }
+        }
 
-            // Accumulate the tiled matrix multiplications by loading the sliced
-            // vectors from shared memory to local register files.
+        // Move the prefetched global memory values to the shared memory.
+        loader_a.commit(page);
+        loader_b.commit(page);
+        __syncthreads();
+
+        // Prefetch the next tiles from the global memory.
+        if (iter.valid()) {
+            loader_a.prefetch(block.idx() * TILE_32x32_WIDTH + k, 0);
+            loader_b.prefetch(trans_b ? n : base_k + k,
+                              trans_b ? base_k + k : n);
+        }
+
+        // Accumulate the tiled matrix multiplications by loading the sliced
+        // vectors from shared memory to local register files.
+        #pragma unroll
+        for (uint i = 0; i < tile_storage::ROWS; ++ i) {
+            float local_a[4], local_b;
+
             #pragma unroll
-            for (uint i = 0; i < tile_storage::ROWS; ++ i) {
-                float local_a[4], local_b;
+            for (uint j = 0; j < 4; ++ j)
+                local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
+            local_b = tile_b.get(page, i, lane_idx);
 
-                #pragma unroll
-                for (uint j = 0; j < 4; ++ j)
-                    local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
-                local_b = tile_b.get(page, i, lane_idx);
-
-                #pragma unroll
-                for (uint j = 0; j < 4; ++ j)
-                    accumulator[j] += local_a[j] * local_b;
-            }
+            #pragma unroll
+            for (uint j = 0; j < 4; ++ j)
+                accumulator[j] += local_a[j] * local_b;
         }
     }
 
