@@ -186,6 +186,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
     }
 
+
     #pragma unroll 1
     for (uint loop = 0; iter.valid(); ++ loop) {
         // Move the prefetched global memory values to the shared memory.
@@ -220,11 +221,13 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         }
     }
 
+    /*
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[blockIdx.x * size_m * size_n
                  + (m + warp_idx * 4 + i) * size_n
                  + (n + lane_idx)] = accumulator[i];
+    */
 }
 
 
