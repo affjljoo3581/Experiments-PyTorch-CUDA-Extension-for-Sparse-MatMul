@@ -197,6 +197,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
 
         // Prefetch the next tiles from the global memory.
         if (iter.valid()) {
+            if (loop % 4 == 0) block = *iter;
+
             uint k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
             base_k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
