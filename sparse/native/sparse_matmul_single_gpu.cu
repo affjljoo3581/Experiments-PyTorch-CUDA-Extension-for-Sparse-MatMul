@@ -182,7 +182,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         auto block = *iter;
         uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
-        //loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
+        loader_a.prefetch(block.idx() * TILE_32x32_SIZE, 0);
         loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
     }
 
