@@ -242,7 +242,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
  * It multiplies a dense matrix with a sparse matrix and create new dense matrix
  * through corresponding sparse layout.
  * 
- * Blocks               : (Total Batches, Sparse Block Rows, Dense Block Cols)
+ * Blocks               : (Total Batches, Dense Block Rows, Sparse Block Cols)
  * Threads per Block    : 256
  */
 __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dds_32x32_kernel(
@@ -274,7 +274,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dds_32x32_kernel(
     if (!iter.valid()) return;
 
     auto block = *iter;
-    uint k = (trans_a ? block.col() : block.row()) * TILE_32x32_WIDTH;
+    uint k = (trans_b ? block.col() : block.row()) * TILE_32x32_WIDTH;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? k : m, trans_a ? m : k);
@@ -293,9 +293,9 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dds_32x32_kernel(
         if (iter.valid()) {
             uint sub_k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
 
-            if (loop % 4 == 0) {                
+            if (loop % 4 == 0) {
                 block = *iter;
-                k = (trans_a ? block.col() : block.row()) * TILE_32x32_WIDTH;
+                k = (trans_b ? block.col() : block.row()) * TILE_32x32_WIDTH;
             }
 
             loader_a.prefetch(trans_a ? k + sub_k : m, trans_a ? m : k + sub_k);
