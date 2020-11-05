@@ -236,6 +236,99 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
 }
 
 
+/**
+ * Compute sparse matrix multiplication with DDS mode.
+ * 
+ * It multiplies a dense matrix with a sparse matrix and create new dense matrix
+ * through corresponding sparse layout.
+ * 
+ * Blocks               : (Total Batches, Sparse Block Rows, Dense Block Cols)
+ * Threads per Block    : 256
+ */
+__global__ void __launch_bounds__(256, 8) sparse_matmul_single_dds_32x32_kernel(
+    const float* __restrict__ matrix_a,
+    const float* __restrict__ matrix_b,
+          float* __restrict__ matrix_c,
+    sparse_layout layout, uint num_blocks,
+    uint size_m, uint size_n, uint size_k,
+    bool trans_a, bool trans_b
+) {
+    float accumulator[4] = { 0.0f, };
+
+    uint lane_idx = threadIdx.x % 32;
+    uint warp_idx = threadIdx.x / 32;
+
+    uint m = blockIdx.y * TILE_32x32_WIDTH;
+    uint n = blockIdx.z * TILE_32x32_WIDTH;
+
+    // Define shared tile storages and tile loaders.
+    __shared__ tile_storage tile_a, tile_b;
+
+    tile_loader loader_a(matrix_a + blockIdx.x * size_m * size_k,
+                         tile_a, trans_a ? size_m : size_k, !trans_a);
+    tile_loader loader_b(matrix_b + blockIdx.x * num_blocks * TILE_32x32_SIZE,
+                         tile_b, TILE_32x32_WIDTH, trans_b);
+
+    // Get corresponding block iterator from the sparse layout.
+    auto iter = layout.begin(blockIdx.z);
+    if (!iter.valid()) return;
+
+    auto block = *iter;
+    uint k = (trans_a ? block.col() : block.row()) * TILE_32x32_WIDTH;
+
+    // Prefetch first tiles from the global memory.
+    loader_a.prefetch(trans_a ? k : m, trans_a ? m : k);
+    loader_b.prefetch(block.idx() * TILE_32x32_WIDTH, 0);
+
+    #pragma unroll 1
+    for (uint loop = 1; iter.valid(); ++ loop) {
+        if (loop % 4 == 0) iter.next();
+
+        // Move the prefetched global memory values to the shared memory.
+        loader_a.commit(loop % 2);
+        loader_b.commit(loop % 2);
+        __syncthreads();
+
+        // Prefetch the next tiles from the global memory.        
+        if (iter.valid()) {
+            uint sub_k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
+
+            if (loop % 4 == 0) {                
+                block = *iter;
+                k = (trans_a ? block.col() : block.row()) * TILE_32x32_WIDTH;
+            }
+
+            loader_a.prefetch(trans_a ? k + sub_k : m, trans_a ? m : k + sub_k);
+            loader_b.prefetch(
+                block.idx() * TILE_32x32_WIDTH + (trans_b ? 0 : sub_k),
+                trans_b ? sub_k : 0);
+        }
+
+        // Accumulate the tiled matrix multiplications by loading the sliced
+        // vectors from shared memory to local register files.
+        #pragma unroll
+        for (uint i = 0; i < tile_storage::ROWS; ++ i) {
+            float local_a[4], local_b;
+
+            #pragma unroll
+            for (uint j = 0; j < 4; ++ j)
+                local_a[j] = tile_a.get(loop % 2, i, warp_idx * 4 + j);
+            local_b = tile_b.get(loop % 2, i, lane_idx);
+
+            #pragma unroll
+            for (uint j = 0; j < 4; ++ j)
+                accumulator[j] += local_a[j] * local_b;
+        }
+    }
+
+    #pragma unroll
+    for (uint i = 0; i < 4; ++ i)
+        matrix_c[blockIdx.x * size_m * size_n
+                 + (m + warp_idx * 4 + i) * size_n
+                 + (n + lane_idx)] = accumulator[i];
+}
+
+
 torch::Tensor sparse_matmul_single(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
     const layout_tensors& row_layout, const layout_tensors& col_layout,
@@ -285,7 +378,7 @@ torch::Tensor sparse_matmul_single(
 
     auto kernel = mode == "sdd" ? sparse_matmul_single_sdd_32x32_kernel :
                   mode == "dsd" ? sparse_matmul_single_dsd_32x32_kernel :
-                                  sparse_matmul_single_sdd_32x32_kernel;
+                                  sparse_matmul_single_dds_32x32_kernel;
     kernel<<<blocks, 256>>>(
         a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
         layout, num_blocks, size_m, size_n, size_k, trans_a, trans_b
