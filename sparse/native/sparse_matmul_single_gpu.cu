@@ -197,14 +197,19 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
 
         // Prefetch the next tiles from the global memory.
         if (iter.valid()) {
-            if (loop % 4 == 0) block = *iter;
+            if (loop % 4 == 0) {
+                block = *iter;
+                base_k = (trans_a ? block.row()
+                                  : block.col()) * TILE_32x32_WIDTH;
+            }
 
             uint k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
-            base_k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
-            loader_a.prefetch(block.idx() * TILE_32x32_WIDTH + k, 0);
-            loader_b.prefetch(trans_b ? n : base_k + k,
-                              trans_b ? base_k + k : n);
+            loader_a.prefetch(
+                block.idx() * TILE_32x32_WIDTH + (trans_a ? k : 0),
+                trans_a ? 0 : k);
+            loader_b.prefetch(
+                trans_b ? n : base_k + k, trans_b ? base_k + k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
