@@ -80,6 +80,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    float accumulator[4] = { 0.0f, };
+
     uint lane_idx = threadIdx.x % 32;
     uint warp_idx = threadIdx.x / 32;
 
@@ -99,8 +101,6 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
-
-    float accumulator[4] = { 0.0f, };
 
     #pragma unroll 1
     for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
@@ -160,6 +160,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    float accumulator[4] = { 0.0f, };
+
     uint lane_idx = threadIdx.x % 32;
     uint warp_idx = threadIdx.x / 32;
 
@@ -174,17 +176,16 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
     tile_loader loader_b(matrix_b + blockIdx.x * size_k * size_n,
                          tile_b, trans_b ? size_k : size_n, trans_b);
 
+    // Get corresponding block iterator from the sparse layout.
     auto iter = layout.begin(blockIdx.y);
     if (!iter.valid()) return;
 
     auto block = *iter;
-    uint base_k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
+    uint k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(block.idx() * TILE_32x32_WIDTH, 0);
-    loader_b.prefetch(trans_b ? n : base_k, trans_b ? base_k : n);
-
-    float accumulator[4] = { 0.0f, };
+    loader_b.prefetch(trans_b ? n : k, trans_b ? k : n);
 
     #pragma unroll 1
     for (uint loop = 1; iter.valid(); ++ loop) {
@@ -195,21 +196,19 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_single_dsd_32x32_kernel(
         loader_b.commit(loop % 2);
         __syncthreads();
 
-        // Prefetch the next tiles from the global memory.
+        // Prefetch the next tiles from the global memory.        
         if (iter.valid()) {
-            if (loop % 4 == 0) {
+            uint sub_k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
+
+            if (loop % 4 == 0) {                
                 block = *iter;
-                base_k = (trans_a ? block.row()
-                                  : block.col()) * TILE_32x32_WIDTH;
+                k = (trans_a ? block.row() : block.col()) * TILE_32x32_WIDTH;
             }
 
-            uint k = (loop * tile_storage::ROWS) % TILE_32x32_WIDTH;
-
             loader_a.prefetch(
-                block.idx() * TILE_32x32_WIDTH + (trans_a ? k : 0),
-                trans_a ? 0 : k);
-            loader_b.prefetch(
-                trans_b ? n : base_k + k, trans_b ? base_k + k : n);
+                block.idx() * TILE_32x32_WIDTH + (trans_a ? sub_k : 0),
+                trans_a ? 0 : sub_k);
+            loader_b.prefetch(trans_b ? n : k + sub_k, trans_b ? k + sub_k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
