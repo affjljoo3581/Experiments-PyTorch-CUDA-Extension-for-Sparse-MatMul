@@ -108,7 +108,7 @@ struct tile {
             : src_a(src_a), src_b(src_b)
         {
             x = threadIdx.x * PACKED % WARPS;
-            y = threadIdx.y * PACKED / WARPS * (ROWS / COLUMNS);
+            y = threadIdx.x * PACKED / WARPS * (ROWS / COLUMNS);
         }
 
         __device__ __forceinline__ void apply(
