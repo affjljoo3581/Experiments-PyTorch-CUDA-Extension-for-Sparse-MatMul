@@ -135,7 +135,7 @@ struct tile {
 
                 #pragma unroll
                 for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    local_b[j] = src_b.get(page, y, i);
+                    local_b[j] = src_b.get(page, y + j, i);
                 local_a = src_a.get(page, x, i);
 
                 #pragma unroll
