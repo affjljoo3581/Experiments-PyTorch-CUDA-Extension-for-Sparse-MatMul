@@ -117,9 +117,10 @@ struct tile {
             #pragma unroll
             for (uint i = 0; i < PACKED; ++ i) {
                 #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; j += PACKED)
+                for (uint j = 0; j < ROWS / COLUMNS; j += PACKED) {
                     *(uint *) &dst[(m + x) * stride + (n + j)]
-                        = *(uint *) &accumulator[i][j];
+                        = *(uint *) &data[i][j];
+                }
             }
         }
 
