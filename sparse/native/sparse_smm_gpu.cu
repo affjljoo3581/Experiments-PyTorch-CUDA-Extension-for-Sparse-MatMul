@@ -59,6 +59,7 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
     for (uint k = 0; k < size_k; k += 8) {
         loader_a.commit(k / 8 % 2);
         loader_b.commit(k / 8 % 2);
+        __syncthreads();
 
         if (k + 8 < size_k) {
             loader_a.prefetch(trans_a ? k + 8 : m, trans_a ? m : k + 8);
