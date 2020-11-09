@@ -32,9 +32,6 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    uint lane_idx = threadIdx.x % warpSize;
-    uint warp_idx = threadIdx.x / warpSize;
-
     auto block = layout.get(blockIdx.x);
     uint m = block.row() * 32;
     uint n = block.col() * 32;
