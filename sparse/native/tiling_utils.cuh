@@ -101,7 +101,13 @@ struct tile {
         T buffer[PACKED];
     };
 
-
+    /**
+     * Accumulator class for tile matrix multiplication.
+     * 
+     * After loading tiles to shared memory, vector-products would be computed
+     * with the loaded tiles. This class fetches subvectors from the storages to
+     * the local register files and compute a part of vector-products.
+     */
     class accumulator {
     public:
         __device__ __forceinline__ accumulator(storage &src_a, storage &src_b)
@@ -115,13 +121,9 @@ struct tile {
             T* __restrict__ dst, uint m, uint n, uint stride
         ) {
             #pragma unroll
-            for (uint i = 0; i < PACKED; ++ i) {
-                #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; j += PACKED) {
-                    *(uint *) &dst[(m + x) * stride + (n + y + j)]
-                        = *(uint *) &data[i][j];
-                }
-            }
+            for (uint i = 0; i < ROWS / COLUMNS; i += PACKED)
+                *(uint *) &dst[(m + x) * stride + (n + y + i)]
+                    = *(uint *) &data[i];
         }
 
         __device__ __forceinline__ void product(uint page) {
@@ -140,17 +142,35 @@ struct tile {
 
                 #pragma unroll
                 for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    data[0][j] += local_a * local_b[j];
+                    data[j] += local_a * local_b[j];
             }
         }
 
         __device__ __forceinline__ void product(uint page, caseof<half>) {
-            
+            half2 local_c[ROWS / COLUMNS];
+
+            #pragma unroll
+            for (uint i = 0; i < COLUMNS; i += 2) {
+                half2 local_a, local_b[ROWS / COLUMNS];
+
+                #pragma unroll
+                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
+                    local_b[j] = *(half2 *) &src_b.get(page, y + j, i);
+                local_a = *(half2 *) &src_a.get(page, x, i);
+
+                #pragma unroll
+                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
+                    local_c[j] = __hfma2(local_a, local_b[j], local_c[j]);
+            }
+
+            #pragma unroll
+            for (uint i = 0; i < ROWS / COLUMNS; ++ i)
+                data[i] = __low2half(local_c[i]) + __high2half(local_c[i]);
         }
     private:
         storage &src_a, &src_b;
         uint x, y;
 
-        T data[PACKED][ROWS / COLUMNS] = { 0.0f, };
+        T data[ROWS / COLUMNS] = { 0.0f, };
     };
 };
