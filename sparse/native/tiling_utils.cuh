@@ -58,7 +58,7 @@ struct tile {
             : src(src), dst(dst), stride(stride), trans(trans)
         {
             x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
-            y = threadIdx.y * PACKED / (trans ? ROWS : COLUMNS);
+            y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
         }
 
         __device__ __forceinline__ void prefetch(uint row, uint col) {
