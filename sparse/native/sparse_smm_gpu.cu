@@ -68,23 +68,23 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
 
         #pragma unroll
         for (uint i = 0; i < 8; ++ i) {
-            float local_a[4], local_b;
+            float local_a, local_b[4];
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = storage_a.get(k / 8 % 2, warp_idx * 4 + j, i);
-            local_b = storage_b.get(k / 8 % 2, lane_idx, i);
+                local_b[j] = storage_b.get(k / 8 % 2, warp_idx * 4 + j, i);
+            local_a = storage_a.get(k / 8 % 2, lane_idx, i);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a[j] * local_b;
+                accumulator[j] += local_a * local_b[j];
         }
     }
 
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
+                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
 }
 
 

@@ -100,4 +100,56 @@ struct tile {
 
         T buffer[PACKED];
     };
+
+
+    class accumulator {
+    public:
+        accumulator(const storage& src_a, const storage& src_b)
+            : src_a(src_a), src_b(src_b)
+        {
+            x = threadIdx.x % WARPS;
+            y = threadIdx.y / WARPS * (ROWS / COLUMNS);
+        }
+
+        __device__ __forceinline__ void apply(
+            T* __restrict__ dst, uint m, uint n, uint stride
+        ) {
+            #pragma unroll
+            for (uint i = 0; i < PACKED; ++ i) {
+                #pragma unroll
+                for (uint j = 0; j < ROWS / COLUMNS; j += PACKED)
+                    *(uint *) &dst[(m + x) * stride + (n + j)]
+                        = *(uint *) &accumulator[i][j];
+            }
+        }
+
+        __device__ __forceinline__ void product(uint page) {
+            product(page, caseof<T>());
+        }
+
+        __device__ __forceinline__ void product(uint page, caseof<float>) {
+            #pragma unroll
+            for (uint i = 0; i < COLUMNS; ++ i) {
+                float local_a, local_b[ROWS / COLUMNS];
+
+                #pragma unroll
+                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
+                    local_b[j] = src_b.get(page, y, i);
+                local_a = src_a.get(page, x, i);
+
+                #pragma unroll
+                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
+                    data[0][j] += local_a * local_b[j];
+            }
+        }
+
+        __device__ __forceinline__ void product(uint page, caseof<half>) {
+            
+        }
+    private:
+        storage &src_a, &src_b;
+        uint x, y;
+
+        T data[PACKED][ROWS / COLUMNS] = { 0.0f, };
+    }
 };
