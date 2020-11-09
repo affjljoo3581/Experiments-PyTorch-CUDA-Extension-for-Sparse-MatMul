@@ -52,10 +52,10 @@ struct tile {
     class loader {
     public:
         __device__ __forceinline__ loader(const T* __restrict__ src,
-                                          storage &storage,
+                                          storage &dst,
                                           uint stride,
                                           bool trans)
-            : src(src), storage(storage), stride(stride), trans(trans)
+            : src(src), dst(dst), stride(stride), trans(trans)
         {
             x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
             y = threadIdx.y * PACKED / (trans ? ROWS : COLUMNS);
@@ -70,7 +70,7 @@ struct tile {
         }
 
         __device__ __forceinline__ void commit(uint page, caseof<float>) {
-            *(float *) &storage.get(page, trans ? x : y, trans ? y : x)
+            *(float *) &dst.get(page, trans ? x : y, trans ? y : x)
                 = *(float *) &buffer;
         }
 
@@ -89,12 +89,11 @@ struct tile {
                 else coupled = __highs2half2(neighbor, coupled);
             }
 
-            *(half2 *) &storage.get(page, trans ? x : y, trans ? y : x)
-                = coupled;
+            *(half2 *) &dst.get(page, trans ? x : y, trans ? y : x) = coupled;
         }
     private:
         const T* __restrict__ src;
-        storage& storage;
+        storage& dst;
 
         uint stride, x, y;
         bool trans;
