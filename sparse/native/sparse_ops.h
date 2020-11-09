@@ -6,9 +6,6 @@
 
 using layout_tensors = std::tuple<torch::Tensor, torch::Tensor>;
 
-constexpr uint TILE_32x32_WIDTH = 32;
-constexpr uint TILE_32x32_SIZE = TILE_32x32_WIDTH * TILE_32x32_WIDTH;
-
 
 torch::Tensor sparse_matmul_single(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
