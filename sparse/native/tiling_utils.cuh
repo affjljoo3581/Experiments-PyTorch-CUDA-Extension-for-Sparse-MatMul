@@ -104,7 +104,7 @@ struct tile {
 
     class accumulator {
     public:
-        accumulator(const storage& src_a, const storage& src_b)
+        accumulator(const storage &src_a, const storage &src_b)
             : src_a(src_a), src_b(src_b)
         {
             x = threadIdx.x % WARPS;
@@ -148,7 +148,7 @@ struct tile {
             
         }
     private:
-        storage &src_a, &src_b;
+        const storage &src_a, &src_b;
         uint x, y;
 
         T data[PACKED][ROWS / COLUMNS] = { 0.0f, };
