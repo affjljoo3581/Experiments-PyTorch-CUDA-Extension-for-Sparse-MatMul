@@ -151,5 +151,5 @@ struct tile {
         uint x, y;
 
         T data[PACKED][ROWS / COLUMNS] = { 0.0f, };
-    }
+    };
 };
