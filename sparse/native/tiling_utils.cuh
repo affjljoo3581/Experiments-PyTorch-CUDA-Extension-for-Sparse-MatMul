@@ -13,6 +13,8 @@ template <typename T> struct caseof {};
 
 template <typename T, uint ROWS, uint COLUMNS>
 struct tile {
+    constexpr static uint WARPS = 32;
+
     constexpr static uint PACKED = 4 / sizeof(T);
     constexpr static uint THREADS = ROWS * COLUMNS / PACKED;
 
@@ -27,7 +29,7 @@ struct tile {
     public:
         constexpr static uint PAGES = 2;
 
-        constexpr static uint UNIT = warpSize * PACKED;
+        constexpr static uint UNIT = WARPS * PACKED;
         constexpr static uint STRIDE = COLUMNS + PACKED;
 
         constexpr static uint SIZE = (ROWS * STRIDE + UNIT - 1) / UNIT * UNIT;
@@ -92,7 +94,7 @@ struct tile {
         }
     private:
         const T* __restrict__ src;
-        tile_storage<T, ROWS, COLUMNS>& storage;
+        storage& storage;
 
         uint stride, x, y;
         bool trans;
