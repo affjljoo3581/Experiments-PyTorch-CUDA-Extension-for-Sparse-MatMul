@@ -32,8 +32,6 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    float accumulator[4] = { 0.0f, };
-
     uint lane_idx = threadIdx.x % warpSize;
     uint warp_idx = threadIdx.x / warpSize;
 
@@ -52,6 +50,8 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
         trans_b ? size_k : size_n, !trans_b
     );
 
+    tile<float, 32, 8>::accumulator accumulator(storage_a, storage_b);
+
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
 
@@ -66,25 +66,12 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_smm_sdd_32x32x8_kernel(
             loader_b.prefetch(trans_b ? n : k + 8, trans_b ? k + 8 : n);
         }
 
-        #pragma unroll
-        for (uint i = 0; i < 8; ++ i) {
-            float local_a, local_b[4];
-
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                local_b[j] = storage_b.get(k / 8 % 2, warp_idx * 4 + j, i);
-            local_a = storage_a.get(k / 8 % 2, lane_idx, i);
-
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a * local_b[j];
-        }
+        accumulator.product(k / 8 % 2);
     }
 
-    #pragma unroll
-    for (uint i = 0; i < 4; ++ i)
-        matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
+    accumulator.apply(
+        &matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32], 0, 0, 32
+    );
 }
 
 
