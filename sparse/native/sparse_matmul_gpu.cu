@@ -10,16 +10,16 @@
 #include "tiling_utils.cuh"
 
 
-#define LAUNCH_BOUNDS_TILE(T, ROWS, COLUMNS)                    \
-    __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,          \
+#define LAUNCH_BOUNDS_TILE(T, ROWS, COLUMNS)                        \
+    __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,              \
                       1024 / tile<T, ROWS, COLUMNS>::THREADS)
 
-#define DISPATCH_KERNEL_WITH_TYPE(TYPE, ...)                    \
-    [&] {   if (TYPE == at::ScalarType::Float) {                \
-                using T = float; __VA_ARGS__();                 \
-            } else if (TYPE == at::ScalarType::Half) {          \
-                using T = at::Half; __VA_ARGS__();              \
-            }                                                   }()
+#define DISPATCH_KERNEL_WITH_TYPE(TYPE, ...)                        \
+    [&] {   if (TYPE == at::ScalarType::Float) {                    \
+                using T = float; using U = float; __VA_ARGS__();    \
+            } else if (TYPE == at::ScalarType::Half) {              \
+                using T = at::Half; using U = half; __VA_ARGS__();  \
+            }                                                       }()
 
 
 /**
@@ -133,7 +133,7 @@ torch::Tensor sparse_matmul(
                       mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<T> :
                                       sparse_matmul_sdd_32x32x8_kernel<T>;
         kernel<<<blocks, tile<T, 32, 8>::THREADS>>>(
-            a.data_ptr<T>(), b.data_ptr<T>(), c.data_ptr<T>(),
+            (U*) a.data_ptr<T>(), (U*) b.data_ptr<T>(), (U*) c.data_ptr<T>(),
             layout, num_blocks, size_m, size_n, size_k,
             trans_a, trans_b
         );
