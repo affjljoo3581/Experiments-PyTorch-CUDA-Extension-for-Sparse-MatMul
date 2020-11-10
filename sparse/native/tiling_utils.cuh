@@ -6,9 +6,7 @@
 #include <device_functions.h>
 #include <device_launch_parameters.h>
 
-
-/** An empty type-wrapper class to separate routines by corresponding type. */
-template <typename T> struct caseof {};
+#include <type_traits>
 
 
 template <typename T> struct packed {};
@@ -22,6 +20,9 @@ struct tile {
 
     constexpr static uint PACKED = 4 / sizeof(T);
     constexpr static uint THREADS = ROWS * COLUMNS / PACKED;
+
+
+    using packed_t = typename packed<T>::type;
 
     /**
      * Tile storage class to store a part of matrix in shared memory.
@@ -56,33 +57,26 @@ struct tile {
      */
     class loader {
     public:
-        __device__ __forceinline__ loader(bool trans)
-            : trans(trans)
-        {
-            x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
-            y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
-        }
+        __device__ __forceinline__ loader(bool trans) : trans(trans) {}
 
-        __device__ __forceinline__ void prefetch(const T* __restrict__ src, uint row, uint col, uint stride) {
+        __device__ __forceinline__ void prefetch(
+            const T* __restrict__ src, uint stride,
+            uint row, uint col
+        ) {
+            uint x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
+            uint y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
+
             *(uint *) &buffer = *(uint *) &src[(row + y) * stride + (col + x)];
         }
 
         __device__ __forceinline__ void commit(storage &dst, uint page) {
-            commit(dst, page, caseof<T>());
-        }
+            uint x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
+            uint y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
 
-        __device__ __forceinline__ void commit(storage &dst, uint page, caseof<float>) {
-            *(float *) &dst.get(page, trans ? x : y, trans ? y : x)
-                = *(float *) &buffer;
-        }
-
-        __device__ __forceinline__ void commit(storage &dst, uint page, caseof<half>) {
-            half2 coupled = *(half2 *) &buffer;
-
-            if (trans) {
+            if (std::is_same_v<T, half> && trans) {
                 // Get another coupled `half2` variable from neighbor row.
                 half2 neighbor = __shfl_xor_sync(
-                    0xffffffff, coupled, warpSize / PACKED, warpSize
+                    0xffffffff, buffer, warpSize / PACKED, warpSize
                 );
 
                 // Mix the original coupled variable and neighbor's one to
@@ -91,83 +85,11 @@ struct tile {
                 else coupled = __highs2half2(neighbor, coupled);
             }
 
-            *(half2 *) &dst.get(page, trans ? x : y, trans ? y : x) = coupled;
+            *(packed_t *) &dst.get(page, trans ? x : y, trans ? y : x) = buffer;
         }
     private:
-        uint x, y;
+        packed_t buffer;
+
         bool trans;
-
-        T buffer[PACKED];
-    };
-
-    /**
-     * Accumulator class for tile matrix multiplication.
-     * 
-     * After loading tiles to shared memory, vector-products would be computed
-     * with the loaded tiles. This class fetches subvectors from the storages to
-     * the local register files and compute a part of vector-products.
-     */
-    class accumulator {
-    public:
-        __device__ __forceinline__ accumulator()
-        {
-            x = threadIdx.x * PACKED % WARPS;
-            y = threadIdx.x * PACKED / WARPS * (ROWS / COLUMNS);
-        }
-
-        __device__ __forceinline__ void apply(
-            T* __restrict__ dst, uint m, uint n, uint stride
-        ) {
-            #pragma unroll
-            for (uint i = 0; i < ROWS / COLUMNS; i += PACKED)
-                *(uint *) &dst[(m + x) * stride + (n + y + i)]
-                    = *(uint *) &data[i];
-        }
-
-        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page) {
-            product(src_a, src_b, page, caseof<T>());
-        }
-
-        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page, caseof<float>) {
-            #pragma unroll
-            for (uint i = 0; i < COLUMNS; ++ i) {
-                float local_a, local_b[ROWS / COLUMNS];
-
-                #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    local_b[j] = src_b.get(page, y + j, i);
-                local_a = src_a.get(page, x, i);
-
-                #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    data[j] += local_a * local_b[j];
-            }
-        }
-
-        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page, caseof<half>) {
-            half2 local_c[ROWS / COLUMNS];
-
-            #pragma unroll
-            for (uint i = 0; i < COLUMNS; i += 2) {
-                half2 local_a, local_b[ROWS / COLUMNS];
-
-                #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    local_b[j] = *(half2 *) &src_b.get(page, y + j, i);
-                local_a = *(half2 *) &src_a.get(page, x, i);
-
-                #pragma unroll
-                for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    local_c[j] += local_a * local_b[j];
-            }
-
-            #pragma unroll
-            for (uint i = 0; i < ROWS / COLUMNS; ++ i)
-                data[i] = __low2half(local_c[i]) + __high2half(local_c[i]);
-        }
-    private:
-        uint x, y;
-
-        T data[ROWS / COLUMNS] = { 0, };
     };
 };

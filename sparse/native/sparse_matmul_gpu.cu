@@ -18,7 +18,7 @@
     [&] {   if (TYPE == at::ScalarType::Float) {                    \
                 using T = float; using U = float; __VA_ARGS__();    \
             } else if (TYPE == at::ScalarType::Half) {              \
-                using T = at::Half; using U = half; __VA_ARGS__();  \
+                /*using T = at::Half; using U = half; __VA_ARGS__();*/  \
             }                                                       }()
 
 
@@ -32,15 +32,19 @@
  * Threads per Block    : 256 - for single precision
  *                        128 - for half precision
  */
-template <typename T>
-__global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
-    const T* __restrict__ matrix_a,
-    const T* __restrict__ matrix_b,
-          T* __restrict__ matrix_c,
+__global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
+    const float* __restrict__ matrix_a,
+    const float* __restrict__ matrix_b,
+          float* __restrict__ matrix_c,
     sparse_layout layout, uint num_blocks,
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
+    float accumulator[4] = { 0.0f, };
+
+    uint lane_idx = threadIdx.x % warpSize;
+    uint warp_idx = threadIdx.x / warpSize;
+
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
     uint m = block.row() * 32;
@@ -51,12 +55,10 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     uint offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
 
     // Define shared tile storages, loaders and accumulator.
-    __shared__ typename tile<T, 32, 8>::storage storage_a, storage_b;
+    __shared__ typename tile<float, 32, 8>::storage storage_a, storage_b;
 
-    typename tile<T, 32, 8>::loader loader_a(trans_a);
-    typename tile<T, 32, 8>::loader loader_b(!trans_b);
-
-    typename tile<T, 32, 8>::accumulator accum;
+    typename tile<float, 32, 8>::loader loader_a(trans_a);
+    typename tile<float, 32, 8>::loader loader_b(!trans_b);
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(matrix_a + offset_a, trans_a ? 0 : m, trans_a ? m : 0, trans_a ? size_m : size_k);
@@ -71,18 +73,30 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
 
         // Prefetch next tiles from the global memory if available.
         if (k + 8 < size_k) {
-            loader_a.prefetch(matrix_a + offset_a, trans_a ? k + 8 : m, trans_a ? m : k + 8, trans_a ? size_m : size_k);
-            loader_b.prefetch(matrix_b + offset_b, trans_b ? n : k + 8, trans_b ? k + 8 : n, trans_b ? size_k : size_n);
+            loader_a.prefetch(matrix_a + offset_a, trans_a ? size_m : size_k, trans_a ? k + 8 : m, trans_a ? m : k + 8);
+            loader_b.prefetch(matrix_b + offset_b, trans_b ? size_k : size_n, trans_b ? n : k + 8, trans_b ? k + 8 : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
-        // vectors from the shared memory storage to local register files by
-        // using the accumulator object.
-        accum.product(storage_a, storage_b, k / 8 % 2);
+        // vectors from the shared memory storage to local register files.
+        #pragma unroll
+        for (uint i = 0; i < 8; ++ i) {
+            float local_a, local_b[4];
+
+            #pragma unroll
+            for (uint j = 0; j < 4; ++ j)
+                local_b[j] = storage_b.get(k / 8 % 2, warp_idx * 4 + j, i);
+            local_a = storage_a.get(k / 8 % 2, lane_idx, i);
+
+            #pragma unroll
+            for (uint j = 0; j < 4; ++ j)
+                accumulator[j] += local_a * local_b[j];
+        }
     }
 
     // Write the accumulated matrix multiplication results to the global memory.
-    accum.apply(matrix_c + offset_c, 0, 0, 32);
+    for (uint i = 0; i < 4; ++ i)
+        matrix_c[offset_c + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
 }
 
 
@@ -128,9 +142,9 @@ torch::Tensor sparse_matmul(
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
     DISPATCH_KERNEL_WITH_TYPE(a.scalar_type(), ([&] {
-        auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel<U> :
-                      mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<U> :
-                                      sparse_matmul_sdd_32x32x8_kernel<U>;
+        auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel :
+                      mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel :
+                                      sparse_matmul_sdd_32x32x8_kernel;
         kernel<<<blocks, tile<T, 32, 8>::THREADS>>>(
             (U*) a.data_ptr<T>(), (U*) b.data_ptr<T>(), (U*) c.data_ptr<T>(),
             layout, num_blocks, size_m, size_n, size_k,
