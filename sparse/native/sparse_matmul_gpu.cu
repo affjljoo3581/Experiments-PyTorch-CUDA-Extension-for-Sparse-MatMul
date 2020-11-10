@@ -65,22 +65,22 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
 
     #pragma unroll 1
-    for (uint next_k = 8; next_k < size_k; next_k += 8) {
+    for (uint k = 0; k < k; next_k += 8) {
         // Move the prefetched global memory data to the shared memory storage.
-        loader_a.commit(next_k / 8 % 2);
-        loader_b.commit(next_k / 8 % 2);
+        loader_a.commit(k / 8 % 2);
+        loader_b.commit(k / 8 % 2);
         __syncthreads();
 
         // Prefetch next tiles from the global memory if available.
-        if (next_k < size_k) {
-            loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
-            loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
+        if (k + 8 < size_k) {
+            loader_a.prefetch(trans_a ? k + 8 : m, trans_a ? m : k + 8);
+            loader_b.prefetch(trans_b ? n : k + 8, trans_b ? k + 8 : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
         // vectors from the shared memory storage to local register files by
         // using the accumulator object.
-        accum.product(next_k / 8 % 2);
+        accum.product(k / 8 % 2);
     }
 
     // Write the accumulated matrix multiplication results to the global memory.
