@@ -47,16 +47,18 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     uint n = block.col() * 32;
 
     // Define shared tile storages, loaders and accumulator.
-    __shared__ tile<T, 32, 8>::storage storage_a, storage_b;
+    __shared__ typename tile<T, 32, 8>::storage storage_a, storage_b;
 
-    tile<T, 32, 8>::loader loader_a(&matrix_a[blockIdx.y * size_m * size_k],
-                                    storage_a, trans_a ? size_m : size_k,
-                                    trans_a);
-    tile<T, 32, 8>::loader loader_b(&matrix_b[blockIdx.y * size_k * size_n],
-                                    storage_b, trans_b ? size_k : size_n,
-                                    trans_b);
+    typename tile<T, 32, 8>::loader loader_a(
+        &matrix_a[blockIdx.y * size_m * size_k], storage_a,
+        trans_a ? size_m : size_k, trans_a
+    );
+    typename tile<T, 32, 8>::loader loader_b(
+        &matrix_b[blockIdx.y * size_k * size_n], storage_b,
+        trans_b ? size_k : size_n, trans_b
+    );
 
-    tile<T, 32, 8>::accumulator accum(storage_a, storage_b);
+    typename tile<T, 32, 8>::accumulator accum(storage_a, storage_b);
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
