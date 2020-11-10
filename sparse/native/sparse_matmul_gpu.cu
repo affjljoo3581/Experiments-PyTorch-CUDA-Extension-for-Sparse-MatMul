@@ -46,46 +46,43 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     uint m = block.row() * 32;
     uint n = block.col() * 32;
 
+    uint offset_a = blockIdx.y * size_m * size_k;
+    uint offset_b = blockIdx.y * size_k * size_n;
+    uint offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
     // Define shared tile storages, loaders and accumulator.
     __shared__ typename tile<T, 32, 8>::storage storage_a, storage_b;
 
-    typename tile<T, 32, 8>::loader loader_a(
-        &matrix_a[blockIdx.y * size_m * size_k], storage_a,
-        trans_a ? size_m : size_k, trans_a
-    );
-    typename tile<T, 32, 8>::loader loader_b(
-        &matrix_b[blockIdx.y * size_k * size_n], storage_b,
-        trans_b ? size_k : size_n, !trans_b
-    );
+    typename tile<T, 32, 8>::loader loader_a(trans_a);
+    typename tile<T, 32, 8>::loader loader_b(!trans_b);
 
-    typename tile<T, 32, 8>::accumulator accum(storage_a, storage_b);
+    typename tile<T, 32, 8>::accumulator accum;
 
     // Prefetch first tiles from the global memory.
-    loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
-    loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
+    loader_a.prefetch(matrix_a + offset_a, trans_a ? 0 : m, trans_a ? m : 0, trans_a ? size_m : size_k);
+    loader_b.prefetch(matrix_b + offset_b, trans_b ? n : 0, trans_b ? 0 : n, trans_b ? size_k : size_n);
 
     #pragma unroll 1
     for (uint k = 0; k < size_k; k += 8) {
         // Move the prefetched global memory data to the shared memory storage.
-        loader_a.commit(k / 8 % 2);
-        loader_b.commit(k / 8 % 2);
+        loader_a.commit(storage_a, k / 8 % 2);
+        loader_b.commit(storage_b, k / 8 % 2);
         __syncthreads();
 
         // Prefetch next tiles from the global memory if available.
         if (k + 8 < size_k) {
-            loader_a.prefetch(trans_a ? k + 8 : m, trans_a ? m : k + 8);
-            loader_b.prefetch(trans_b ? n : k + 8, trans_b ? k + 8 : n);
+            loader_a.prefetch(matrix_a + offset_a, trans_a ? k + 8 : m, trans_a ? m : k + 8, trans_a ? size_m : size_k);
+            loader_b.prefetch(matrix_b + offset_b, trans_b ? n : k + 8, trans_b ? k + 8 : n, trans_b ? size_k : size_n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
         // vectors from the shared memory storage to local register files by
         // using the accumulator object.
-        accum.product(k / 8 % 2);
+        accum.product(storage_a, storage_b, k / 8 % 2);
     }
 
     // Write the accumulated matrix multiplication results to the global memory.
-    accum.apply(&matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32],
-                0, 0, 32);
+    accum.apply(matrix_c + offset_c, 0, 0, 32);
 }
 
 

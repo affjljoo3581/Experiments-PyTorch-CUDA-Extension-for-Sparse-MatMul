@@ -11,9 +11,9 @@
 template <typename T> struct caseof {};
 
 
-template <typename T> struct packed_type {};
-template <> struct packed_type<float> { using type = float; };
-template <> struct packed_type<half> { using type = half2; };
+template <typename T> struct packed {};
+template <> struct packed<float> { using type = float; };
+template <> struct packed<half> { using type = half2; };
 
 
 template <typename T, uint ROWS, uint COLUMNS>
@@ -56,30 +56,27 @@ struct tile {
      */
     class loader {
     public:
-        __device__ __forceinline__ loader(const T* __restrict__ src,
-                                          storage &dst,
-                                          uint stride,
-                                          bool trans)
-            : src(src), dst(dst), stride(stride), trans(trans)
+        __device__ __forceinline__ loader(bool trans)
+            : trans(trans)
         {
             x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
             y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
         }
 
-        __device__ __forceinline__ void prefetch(uint row, uint col) {
+        __device__ __forceinline__ void prefetch(const T* __restrict__ src, uint row, uint col, uint stride) {
             *(uint *) &buffer = *(uint *) &src[(row + y) * stride + (col + x)];
         }
 
-        __device__ __forceinline__ void commit(uint page) {
+        __device__ __forceinline__ void commit(storage &dst, uint page) {
             commit(page, caseof<T>());
         }
 
-        __device__ __forceinline__ void commit(uint page, caseof<float>) {
+        __device__ __forceinline__ void commit(storage &dst, uint page, caseof<float>) {
             *(float *) &dst.get(page, trans ? x : y, trans ? y : x)
                 = *(float *) &buffer;
         }
 
-        __device__ __forceinline__ void commit(uint page, caseof<half>) {
+        __device__ __forceinline__ void commit(storage &dst, uint page, caseof<half>) {
             half2 coupled = *(half2 *) &buffer;
 
             if (trans) {
@@ -97,10 +94,7 @@ struct tile {
             *(half2 *) &dst.get(page, trans ? x : y, trans ? y : x) = coupled;
         }
     private:
-        const T* __restrict__ src;
-        storage& dst;
-
-        uint stride, x, y;
+        uint x, y;
         bool trans;
 
         T buffer[PACKED];
@@ -115,8 +109,7 @@ struct tile {
      */
     class accumulator {
     public:
-        __device__ __forceinline__ accumulator(storage &src_a, storage &src_b)
-            : src_a(src_a), src_b(src_b)
+        __device__ __forceinline__ accumulator()
         {
             x = threadIdx.x * PACKED % WARPS;
             y = threadIdx.x * PACKED / WARPS * (ROWS / COLUMNS);
@@ -131,11 +124,11 @@ struct tile {
                     = *(uint *) &data[i];
         }
 
-        __device__ __forceinline__ void product(uint page) {
-            product(page, caseof<T>());
+        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page) {
+            product(src_a, src_b, page, caseof<T>());
         }
 
-        __device__ __forceinline__ void product(uint page, caseof<float>) {
+        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page, caseof<float>) {
             #pragma unroll
             for (uint i = 0; i < COLUMNS; ++ i) {
                 float local_a, local_b[ROWS / COLUMNS];
@@ -151,7 +144,7 @@ struct tile {
             }
         }
 
-        __device__ __forceinline__ void product(uint page, caseof<half>) {
+        __device__ __forceinline__ void product(storage &src_a, storage &src_b, uint page, caseof<half>) {
             half2 local_c[ROWS / COLUMNS];
 
             #pragma unroll
@@ -173,7 +166,6 @@ struct tile {
                 data[i] = __low2half(local_c[i]) + __high2half(local_c[i]);
         }
     private:
-        storage &src_a, &src_b;
         uint x, y;
 
         T data[ROWS / COLUMNS] = { 0, };
