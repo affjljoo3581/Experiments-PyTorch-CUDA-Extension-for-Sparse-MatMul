@@ -160,14 +160,12 @@ struct tile {
 
                 #pragma unroll
                 for (uint j = 0; j < ROWS / COLUMNS; ++ j)
-                    local_c[j] = __hfma2(local_a, local_b[j], local_c[j]);
+                    local_c[j] += local_a * local_b[j];
             }
 
             #pragma unroll
             for (uint i = 0; i < ROWS / COLUMNS; ++ i)
-                data[i] = __float2half(
-                    __low2float(local_c[i]) + __low2float(local_c[i])
-                );
+                data[i] = __low2half(local_c[i]) + __high2half(local_c[i]);
         }
     private:
         storage &src_a, &src_b;

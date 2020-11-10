@@ -8,4 +8,8 @@ _source_files = [os.path.join(_current_dir, file)
                  for file in os.listdir(_current_dir)
                  if file.endswith(('.cu', '.cc'))]
 
-sparse_ops = torch.utils.cpp_extension.load('sparse_ops', _source_files)
+sparse_ops = torch.utils.cpp_extension.load(
+    'sparse_ops', _source_files,
+    extra_cuda_cflags=['-U__CUDA_NO_HALF_OPERATORS__',
+                       '-U__CUDA_NO_HALF_CONVERSIONS__',
+                       '-U__CUDA_NO_HALF2_OPERATORS__'])
