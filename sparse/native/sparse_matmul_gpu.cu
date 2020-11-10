@@ -65,7 +65,7 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
 
     #pragma unroll 1
-    for (uint k = 0; k < k; next_k += 8) {
+    for (uint k = 0; k < size_k; k += 8) {
         // Move the prefetched global memory data to the shared memory storage.
         loader_a.commit(k / 8 % 2);
         loader_b.commit(k / 8 % 2);
