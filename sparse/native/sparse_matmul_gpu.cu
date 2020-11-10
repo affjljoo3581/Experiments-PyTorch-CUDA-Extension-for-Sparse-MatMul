@@ -129,9 +129,9 @@ torch::Tensor sparse_matmul(
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
     DISPATCH_KERNEL_WITH_TYPE(a.scalar_type(), ([&] {
-        auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel<T> :
-                      mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<T> :
-                                      sparse_matmul_sdd_32x32x8_kernel<T>;
+        auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel<U> :
+                      mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<U> :
+                                      sparse_matmul_sdd_32x32x8_kernel<U>;
         kernel<<<blocks, tile<T, 32, 8>::THREADS>>>(
             (U*) a.data_ptr<T>(), (U*) b.data_ptr<T>(), (U*) c.data_ptr<T>(),
             layout, num_blocks, size_m, size_n, size_k,
