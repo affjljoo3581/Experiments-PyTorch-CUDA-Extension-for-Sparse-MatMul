@@ -68,7 +68,7 @@ struct tile {
         }
 
         __device__ __forceinline__ void commit(storage &dst, uint page) {
-            commit(page, caseof<T>());
+            commit(dst, page, caseof<T>());
         }
 
         __device__ __forceinline__ void commit(storage &dst, uint page, caseof<float>) {
