@@ -5,6 +5,6 @@
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("sparse_matmul",
-          &sparse_matmul_single,
-          "Sparse matrix multiplication for single precision.");
+          &sparse_matmul,
+          "Sparse matrix multiplication.");
 }
