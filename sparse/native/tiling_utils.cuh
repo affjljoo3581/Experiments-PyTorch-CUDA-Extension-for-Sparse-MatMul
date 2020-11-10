@@ -11,6 +11,11 @@
 template <typename T> struct caseof {};
 
 
+template <typename T> struct packed_type {};
+template <> struct packed_type<float> { using type = float; };
+template <> struct packed_type<half> { using type = half2; };
+
+
 template <typename T, uint ROWS, uint COLUMNS>
 struct tile {
     constexpr static uint WARPS = 32;

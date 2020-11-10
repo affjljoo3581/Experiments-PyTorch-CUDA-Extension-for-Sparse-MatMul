@@ -55,7 +55,7 @@ __global__ void LAUNCH_BOUNDS_TILE(T, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     );
     typename tile<T, 32, 8>::loader loader_b(
         &matrix_b[blockIdx.y * size_k * size_n], storage_b,
-        trans_b ? size_k : size_n, trans_b
+        trans_b ? size_k : size_n, !trans_b
     );
 
     typename tile<T, 32, 8>::accumulator accum(storage_a, storage_b);
