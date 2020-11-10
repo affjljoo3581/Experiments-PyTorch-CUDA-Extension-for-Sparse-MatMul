@@ -171,6 +171,6 @@ struct tile {
         storage &src_a, &src_b;
         uint x, y;
 
-        T data[ROWS / COLUMNS] = { 0.0f, };
+        T data[ROWS / COLUMNS] = { 0, };
     };
 };
