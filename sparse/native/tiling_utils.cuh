@@ -76,13 +76,13 @@ struct tile {
             if (std::is_same<T, half>::value && trans) {
                 // Get another coupled `half2` variable from neighbor row.
                 half2 neighbor = __shfl_xor_sync(
-                    0xffffffff, buffer, warpSize / PACKED, warpSize
+                    0xffffffff, *(half2*)&buffer, warpSize / PACKED, warpSize
                 );
 
                 // Mix the original coupled variable and neighbor's one to
                 // create new transposed `half2` vector.
-                if (y % 2 == 0) buffer = __lows2half2(buffer, neighbor);
-                else buffer = __highs2half2(neighbor, buffer);
+                if (y % 2 == 0) *(half2*)&buffer = __lows2half2(buffer, neighbor);
+                else *(half2*)&buffer = __highs2half2(neighbor, buffer);
             }
 
             *(packed_t *) &dst.get(page, trans ? x : y, trans ? y : x) = buffer;
