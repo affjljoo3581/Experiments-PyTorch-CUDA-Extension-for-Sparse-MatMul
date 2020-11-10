@@ -81,8 +81,8 @@ struct tile {
 
                 // Mix the original coupled variable and neighbor's one to
                 // create new transposed `half2` vector.
-                if (y % 2 == 0) buffer = __lows2half2(coupled, neighbor);
-                else buffer = __highs2half2(neighbor, coupled);
+                if (y % 2 == 0) buffer = __lows2half2(buffer, neighbor);
+                else buffer = __highs2half2(neighbor, buffer);
             }
 
             *(packed_t *) &dst.get(page, trans ? x : y, trans ? y : x) = buffer;
