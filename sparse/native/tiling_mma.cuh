@@ -61,18 +61,17 @@ struct tile {
     public:
         __device__ __forceinline__ loader(
             const T* __restrict__ src, storage &dst, int stride, bool trans
-        ) : src(src), dst(dst), stride(stride), trans(trans) {}
+        ) : src(src), dst(dst), stride(stride), trans(trans) {
+            x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
+            y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
+        }
 
         __device__ __forceinline__ void prefetch(int row, int col) {
-            int x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
-            int y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
-
             buffer = *(packed_t *) &src[(row + y) * stride + (col + x)];
         }
 
         __device__ __forceinline__ void commit(int page) {
-            int x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
-            int y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
+            int i = x, j = y;
 
             if (std::is_same<T, half>::value && trans) {
                 half2 coupled = *(half2 *) &buffer;
@@ -84,11 +83,11 @@ struct tile {
 
                 buffer = *(packed_t *) &coupled;
 
-                x = x / 2 + y % 2;
-                y = y / 2 * 2;
+                i = x / 2 * 2 + y % 2;
+                j = y / 2 * 2;
             }
 
-            dst.get(page, trans ? x : y, trans ? y : x) = buffer;
+            dst.get(page, trans ? i : j, trans ? j : i) = buffer;
         }
     private:
         packed_t buffer;
@@ -96,7 +95,7 @@ struct tile {
         const T* __restrict__ src;
         storage &dst;
 
-        int stride;
+        int x, y, stride;
         bool trans;
     };
 };
