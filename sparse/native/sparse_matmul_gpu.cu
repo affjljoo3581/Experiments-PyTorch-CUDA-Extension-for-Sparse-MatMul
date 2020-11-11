@@ -98,16 +98,16 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_matmul_sdd_32x32x8_kerne
 
 class tile_storage {
 public:
-    constexpr static uint ROWS      = 8;
-    constexpr static uint COLUMNS   = 32;
+    constexpr static uint ROWS      = 32;
+    constexpr static uint COLUMNS   = 8;
 
     constexpr static uint SKEW      = 1;
-    constexpr static uint STRIDE    = COLUMNS + SKEW;
+    constexpr static uint STRIDE    = COLUMNS;
 
-    constexpr static uint SIZE      = (ROWS * STRIDE + 32 - 1) / 32 * 32;
+    constexpr static uint SIZE      = (ROWS * STRIDE + ROWS * COLUMNS / 32 + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        return buffers[page][i * STRIDE + j];
+        return buffers[page][i * STRIDE + j + (i * STRIDE / 32)];
     }
 private:
     float buffers[2][SIZE];
@@ -121,12 +121,22 @@ public:
                                            uint stride, bool trans)
         : src(src), storage(storage), stride(stride)
     {
+        /*
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
 
         if (trans) {
             from.x = to.y = x % tile_storage::ROWS;
             from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
+        } else {
+            from = to = { x, y };
+        }*/
+        uint x = threadIdx.x % (trans ? 32 : 8);
+        uint y = threadIdx.x / (trans ? 32 : 8);
+
+        if (trans) {
+            from.x = to.y = x;
+            from.y = to.x = y;
         } else {
             from = to = { x, y };
         }
@@ -209,24 +219,24 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         // vectors from shared memory to local register files.
         #pragma unroll
         for (uint i = 0; i < tile_storage::ROWS; ++ i) {
-            float local_a[4], local_b;
+            float local_a, local_b[4];
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
-            local_b = tile_b.get(page, i, lane_idx);
+                local_b[j] = tile_b.get(page, warp_idx * 4 + j, i);
+            local_a = tile_a.get(page, lane_idx, i);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a[j] * local_b;
+                accumulator[j] += local_a * local_b[j];
         }
     }
 
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
-                 + (warp_idx * 4 + i) * TILE_32x32_WIDTH
-                 + lane_idx] = accumulator[i];
+                 + lane_idx * TILE_32x32_WIDTH
+                 + (warp_idx * 4 + i)] = accumulator[i];
 }
 
 
