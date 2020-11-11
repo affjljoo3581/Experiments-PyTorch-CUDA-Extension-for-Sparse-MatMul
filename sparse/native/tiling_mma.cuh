@@ -75,14 +75,14 @@ struct tile {
             int y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
 
             if (std::is_same<T, half>::value && trans) {
-                half2 coupled = reinterpret_cast<half2>(buffer);
+                half2 coupled = *(half2 *) &buffer;
                 half2 neighbor = __shfl_xor_sync(
                     0xffffffff, coupled, COLUMNS / 2, warpSize);
 
                 if (y % 2 == 0) coupled = __lows2half2(coupled, neighbor);
                 else coupled = __highs2half2(neighbor, coupled);
 
-                buffer = reinterpret_cast<packed_t>(coupled);
+                buffer = *(packed_t *) &coupled;
 
                 x = x / 2 + y % 2;
                 y = y / 2 * 2;
