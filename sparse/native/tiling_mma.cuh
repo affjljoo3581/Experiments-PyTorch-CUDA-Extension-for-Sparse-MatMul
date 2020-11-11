@@ -42,7 +42,7 @@ struct tile {
         constexpr static int PAGES = 2;
 
         constexpr static int STRIDE = COLUMNS / PACKED;
-        constexpr static int SKEWS = ROWS * COLUMNS / BANKS / PACKED;
+        constexpr static int SKEWS = ROWS * STRIDE / BANKS;
 
         constexpr static int SIZE = (ROWS * STRIDE + SKEWS + 32 - 1) / 32 * 32;
 
@@ -61,18 +61,19 @@ struct tile {
     public:
         __device__ __forceinline__ loader(
             const T* __restrict__ src, storage &dst, int stride, bool trans
-        ) : src(src), dst(dst), stride(stride), trans(trans) {
-            x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
-            y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
-        }
+        ) : src(src), dst(dst), stride(stride), trans(trans) {}
 
         __device__ __forceinline__ void prefetch(int row, int col) {
+            int x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
+            int y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
+
             buffer = *(packed_t *) &src[(row + y) * stride + (col + x)];
         }
 
         __device__ __forceinline__ void commit(int page) {
-            int i = x, j = y;
-
+            int x = threadIdx.x * PACKED % (trans ? ROWS : COLUMNS);
+            int y = threadIdx.x * PACKED / (trans ? ROWS : COLUMNS);
+            /*
             if (std::is_same<T, half>::value && trans) {
                 half2 coupled = *(half2 *) &buffer;
                 half2 neighbor = __shfl_xor_sync(
@@ -83,11 +84,11 @@ struct tile {
 
                 buffer = *(packed_t *) &coupled;
 
-                i = x / 2 * 2 + y % 2;
-                j = y / 2 * 2;
+                x = x / 2 + y % 2;
+                y = y / 2 * 2;
             }
-
-            dst.get(page, trans ? i : j, trans ? j : i) = buffer;
+            */
+            dst.get(page, trans ? x : y, trans ? y : x) = buffer;
         }
     private:
         packed_t buffer;
@@ -95,7 +96,7 @@ struct tile {
         const T* __restrict__ src;
         storage &dst;
 
-        int x, y, stride;
+        int stride;
         bool trans;
     };
 };
