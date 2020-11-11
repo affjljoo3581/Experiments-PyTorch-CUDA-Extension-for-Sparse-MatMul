@@ -159,7 +159,7 @@ private:
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256
  */
-__global__ void __launch_bounds__(256, 8) sparse_matmul_single_sdd_32x32_kernel(
+__global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
