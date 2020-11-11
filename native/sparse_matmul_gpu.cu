@@ -1,19 +1,26 @@
 #include <cuda.h>
-#include <cuda_fp16.h>
 #include <cuda_runtime.h>
 #include <device_functions.h>
 #include <device_launch_parameters.h>
 
 #include <torch/extension.h>
 
-#include "sparse_kernels.h"
-#include "sparse_layout.cuh"
-#include "tiling_mma.cuh"
+#include "sparse_ops.h"
+#include "layout_utils.cuh"
+#include "tiling_utils.cuh"
 
 
-#define LAUNCH_BOUNDS_TILE(T, ROWS, COLUMNS)                                \
-    __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,                      \
-                      10224 / tile<T, ROWS, COLUMNS>::THREADS)
+#define LAUNCH_BOUNDS_TILE(T, ROWS, COLUMNS)                        \
+    __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,              \
+                      1024 / tile<T, ROWS, COLUMNS>::THREADS)
+
+#define DISPATCH_KERNEL_WITH_TYPE(TYPE, ...)                        \
+    [&] {   if (TYPE == at::ScalarType::Float) {                    \
+                using T = float; using U = float; __VA_ARGS__();    \
+            } else if (TYPE == at::ScalarType::Half) {              \
+                /*using T = at::Half; using U = half; __VA_ARGS__();*/  \
+            }                                                       }()
+
 
 /**
  * Compute sparse matrix multiplication with SDD mode.
@@ -43,31 +50,31 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_matmul_sdd_32x32x8_kerne
     uint m = block.row() * 32;
     uint n = block.col() * 32;
 
+    uint offset_a = blockIdx.y * size_m * size_k;
+    uint offset_b = blockIdx.y * size_k * size_n;
+    uint offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
     // Define shared tile storages, loaders and accumulator.
     __shared__ typename tile<float, 32, 8>::storage storage_a, storage_b;
 
-    typename tile<float, 32, 8>::loader loader_a(
-        matrix_a + blockIdx.y * size_m * size_k,
-        storage_a, trans_a ? size_m : size_k, trans_a);
-    typename tile<float, 32, 8>::loader loader_b(
-        matrix_b + blockIdx.y * size_k * size_n,
-        storage_b, trans_b ? size_k : size_n, !trans_b);
+    typename tile<float, 32, 8>::loader loader_a(trans_a);
+    typename tile<float, 32, 8>::loader loader_b(!trans_b);
 
     // Prefetch first tiles from the global memory.
-    loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
-    loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
+    loader_a.prefetch(matrix_a + offset_a, trans_a ? 0 : m, trans_a ? m : 0, trans_a ? size_m : size_k);
+    loader_b.prefetch(matrix_b + offset_b, trans_b ? n : 0, trans_b ? 0 : n, trans_b ? size_k : size_n);
 
     #pragma unroll 1
     for (uint k = 0; k < size_k; k += 8) {
         // Move the prefetched global memory data to the shared memory storage.
-        loader_a.commit(k / 8 % 2);
-        loader_b.commit(k / 8 % 2);
+        loader_a.commit(storage_a, k / 8 % 2);
+        loader_b.commit(storage_b, k / 8 % 2);
         __syncthreads();
 
         // Prefetch next tiles from the global memory if available.
         if (k + 8 < size_k) {
-            loader_a.prefetch(trans_a ? size_m : size_k, trans_a ? k + 8 : m);
-            loader_b.prefetch(trans_b ? size_k : size_n, trans_b ? n : k + 8);
+            loader_a.prefetch(matrix_a + offset_a, trans_a ? size_m : size_k, trans_a ? k + 8 : m, trans_a ? m : k + 8);
+            loader_b.prefetch(matrix_b + offset_b, trans_b ? size_k : size_n, trans_b ? n : k + 8, trans_b ? k + 8 : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
@@ -89,8 +96,7 @@ __global__ void LAUNCH_BOUNDS_TILE(float, 32, 8) sparse_matmul_sdd_32x32x8_kerne
 
     // Write the accumulated matrix multiplication results to the global memory.
     for (uint i = 0; i < 4; ++ i)
-        matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
+        matrix_c[offset_c + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
 }
 
 
@@ -135,14 +141,16 @@ torch::Tensor sparse_matmul(
     else blocks = dim3(num_batches,
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
-    auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel :
-                  mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel :
-                                  sparse_matmul_sdd_32x32x8_kernel;
-    kernel<<<blocks, tile<float, 32, 8>::THREADS>>>(
-        a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
-        layout, num_blocks, size_m, size_n, size_k,
-        trans_a, trans_b
-    );
+    DISPATCH_KERNEL_WITH_TYPE(a.scalar_type(), ([&] {
+        auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel :
+                      mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel :
+                                      sparse_matmul_sdd_32x32x8_kernel;
+        kernel<<<blocks, tile<T, 32, 8>::THREADS>>>(
+            (U*) a.data_ptr<T>(), (U*) b.data_ptr<T>(), (U*) c.data_ptr<T>(),
+            layout, num_blocks, size_m, size_n, size_k,
+            trans_a, trans_b
+        );
+    }));
 
     // Return the output tensor with multiple batch dimensions.
     return c.reshape(shape);
