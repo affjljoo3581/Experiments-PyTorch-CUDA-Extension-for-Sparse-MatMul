@@ -215,7 +215,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         // Accumulate the tiled matrix multiplications by loading the sliced
         // vectors from shared memory to local register files.
         #pragma unroll
-        for (uint i = 0; i < tile_storage::ROWS; ++ i) {
+        for (uint i = 0; i < 8; ++ i) {
             float local_a[4], local_b;
 
             #pragma unroll
