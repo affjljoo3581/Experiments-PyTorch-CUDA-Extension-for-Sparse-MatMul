@@ -80,8 +80,8 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_b[j] = storage_b.get(k / 8 % 2, warp_idx * 4 + j, i);
-            local_a = storage_a.get(k / 8 % 2, lane_idx, i);
+                local_b[j] = storage_b.get(k / 8 % 2, i, warp_idx * 4 + j);
+            local_a = storage_a.get(k / 8 % 2, i, lane_idx);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
