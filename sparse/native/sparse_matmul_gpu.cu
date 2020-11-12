@@ -179,8 +179,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
-    uint m = block.row() * TILE_32x32_WIDTH;
-    uint n = block.col() * TILE_32x32_WIDTH;
+    uint m = block.row() * 32;
+    uint n = block.col() * 32;
 
     // Prefetch first tiles from the global memory.
     loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
@@ -223,8 +223,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
     #pragma unroll
     for (uint i = 0; i < 4; ++ i)
-        matrix_c[(blockIdx.y * num_blocks + block.idx()) * TILE_32x32_SIZE
-                 + (warp_idx * 4 + i) * TILE_32x32_WIDTH
+        matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
+                 + (warp_idx * 4 + i) * 32
                  + lane_idx] = accumulator[i];
 }
 
