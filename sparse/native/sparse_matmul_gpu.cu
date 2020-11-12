@@ -107,7 +107,7 @@ public:
     constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        return buffers[page][i * STRIDE + j + i * STRIDE / 32];
+        return buffers[page][i * STRIDE + j]; //+ i * STRIDE / 32];
     }
 private:
     float buffers[2][SIZE];
@@ -132,10 +132,10 @@ public:
             from = to = { x, y };
         }*/
         //if (trans) {
-            from.x = to.y = threadIdx.x % tile_storage::ROWS;
-            from.y = to.x = threadIdx.x / tile_storage::ROWS;
+        //    from.x = to.y = threadIdx.x % tile_storage::ROWS;
+        //    from.y = to.x = threadIdx.x / tile_storage::ROWS;
         //} else {
-        //    from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
+            from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
         //}
     }
 
@@ -208,9 +208,10 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
         // Prefetch the next tiles from the global memory.
         if (next_k < size_k) {
-            //loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
-            loader_a.prefetch(trans_a ? m : next_k, trans_a ? next_k : m);
-            loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
+            loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
+            loader_b.prefetch(trans_b ? next_k : n, trans_b ? n : next_k);
+            //loader_a.prefetch(trans_a ? m : next_k, trans_a ? next_k : m);
+            //loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
