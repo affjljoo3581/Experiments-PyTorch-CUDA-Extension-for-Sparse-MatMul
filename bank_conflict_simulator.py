@@ -25,8 +25,8 @@ class SharedMemory:
         self.access_pattern = [0xffff] * self.size
 
     def warp_bank_access(self, warp_idx: int) -> List[int]:
-        return [t % 32 for t in filter(lambda x: x // 32 == warp_idx,
-                                       self.access_pattern)]
+        return sorted([i % 32 for i, t in filter(lambda x: x[1] // 32 == warp_idx,
+                                          enumerate(self.access_pattern))])
 
 
 class Indexor:
@@ -60,10 +60,10 @@ class MyThread(Thread):
         self.shared_mem.access(self, self.indexor.get(
             self.page, x if self.trans else y, y if self.trans else x))
         '''
-
         lane_idx = self.tid % 32
+        warp_idx = self.tid // 32
         self.shared_mem.access(self, self.indexor.get(
-            self.page, lane_idx, 0
+            self.page, warp_idx * 4 + warp_idx % 4, lane_idx // 4
         ))
 
         self.page = 0 if self.page == 1 else 1
@@ -88,13 +88,13 @@ if __name__ == '__main__':
 
     indexor = Indexor(PACKED, BANKS, PAGES, STRIDE, SIZE)
     threads = MyThread.create(
-        MyThread, THREADS, mem, indexor, ROWS, COLUMNS, False)
+        MyThread, THREADS, mem, indexor, ROWS, COLUMNS, True)
 
     for t in threads:
         t.run()
 
     for wid in range(WARPS):
-        print(mem.warp_bank_access(wid))
+        print(set(mem.warp_bank_access(wid)))
 
     mem.clear_access()
     print('=' * 200)
@@ -103,4 +103,4 @@ if __name__ == '__main__':
         t.run()
 
     for wid in range(WARPS):
-        print(mem.warp_bank_access(wid))
+        print(set(mem.warp_bank_access(wid)))
