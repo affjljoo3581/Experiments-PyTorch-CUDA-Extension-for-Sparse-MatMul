@@ -54,6 +54,7 @@ class MyThread(Thread):
         self.page = 0
 
     def run(self):
+        '''
         x = self.tid % (self.ROWS if self.trans else self.COLUMNS)
         y = self.tid // (self.ROWS if self.trans else self.COLUMNS)
         self.shared_mem.access(self, self.indexor.get(
@@ -62,10 +63,9 @@ class MyThread(Thread):
         lane_idx = self.tid % 32
         warp_idx = self.tid // 32
         self.shared_mem.access(self, self.indexor.get(
-            self.page, warp_idx * 4 + warp_idx % 4, lane_idx // 4
+            self.page, lane_idx, 7
         ))
 
-        '''
         self.page = 0 if self.page == 1 else 1
 
 

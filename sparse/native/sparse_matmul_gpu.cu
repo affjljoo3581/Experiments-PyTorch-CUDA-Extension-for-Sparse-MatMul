@@ -107,7 +107,7 @@ public:
     constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        return buffers[0][i * STRIDE + j + i * STRIDE / 32];
+        return buffers[page][i * STRIDE + j + i * STRIDE / 32];
     }
 private:
     float buffers[2][SIZE];
@@ -222,7 +222,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
+                local_a[j] = tile_a.get(page, lane_idx, warp_idx);//warp_idx * 4 + j, i);
             local_b = tile_b.get(page, lane_idx, i);
 
             #pragma unroll
