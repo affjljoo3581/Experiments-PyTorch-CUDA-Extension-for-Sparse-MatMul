@@ -13,7 +13,7 @@
 
 #define LAUNCH_BOUNDS(T, ROWS, COLUMNS)                                     \
     __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,                      \
-                      10224 / tile<T, ROWS, COLUMNS>::THREADS)
+                      2048 / tile<T, ROWS, COLUMNS>::THREADS)
 
 /**
  * Compute sparse matrix multiplication with SDD mode.
@@ -47,11 +47,11 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     __shared__ tile<float, 32, 8>::storage storage_a, storage_b;
 
     tile<float, 32, 8>::loader loader_a(
-        matrix_a + blockIdx.y * size_m * size_k,
+        &matrix_a[blockIdx.y * size_m * size_k],
         storage_a, trans_a ? size_m : size_k, trans_a
     );
     tile<float, 32, 8>::loader loader_b(
-        matrix_b + blockIdx.y * size_k * size_n,
+        &matrix_b[blockIdx.y * size_k * size_n],
         storage_b, trans_b ? size_k : size_n, !trans_b
     );
 
@@ -88,12 +88,46 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
                 accumulator[j] += local_a * local_b[j];
         }
     }
-
+    /*
     // Write the accumulated matrix multiplication results to the global memory.
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
                  + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
+    */
 }
+
+/*
+__global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
+    const float* __restrict__ matrix_a,
+    const float* __restrict__ matrix_b,
+          float* __restrict__ matrix_c,
+    sparse_layout layout, int num_blocks,
+    int size_m, int size_n, int size_k,
+    bool trans_a, bool trans_b
+) {
+    int lane_idx = threadIdx.x % 32;
+    int warp_idx = threadIdx.x / 32;
+
+    auto block = layout.get(blockIdx.x);
+    int m = block.row() * 32;
+    int n = block.col() * 32;
+
+    int load_a = blockIdx.y * size_m * size_k;
+    int load_b = blockIdx.y * size_k * size_n;
+    int load_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
+    __shared__ float tile_a[2][32 * 8 + 8 + 24], tile_b[2][32 * 8 + 8 + 24];
+
+    float accumulator[4] = { 0.0f, };
+    float buffer_a, buffer_b;
+
+    buffer_a = matrix_a[load_a + m * (trans_a ? size_m : size_k) + 0];
+    buffer_b = matrix_b[load_b + 0 * (trans_b ? size_k : size_n) + n];
+
+    for (int k = 0; k < size_k; k += 8) {
+
+    }
+}*/
 
 
 torch::Tensor sparse_matmul(
