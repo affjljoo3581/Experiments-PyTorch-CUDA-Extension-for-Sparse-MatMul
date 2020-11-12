@@ -88,12 +88,10 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
                 accumulator[j] += local_a * local_b[j];
         }
     }
-    /*
     // Write the accumulated matrix multiplication results to the global memory.
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
-    */
+                 + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
 }
 
 /*
