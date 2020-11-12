@@ -197,9 +197,9 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     float accumulator[4] = { 0.0f, };
 
     #pragma unroll 1
-    for (uint k = 0; k < size_k; k += tile_storage::ROWS) {
-        uint page = k / tile_storage::ROWS % 2;
-        uint next_k = k + tile_storage::ROWS;
+    for (uint k = 0; k < size_k; k += 8) {
+        uint page = k / 8 % 2;
+        uint next_k = k + 8;
 
         // Move the prefetched global memory values to the shared memory.
         loader_a.commit(page);
