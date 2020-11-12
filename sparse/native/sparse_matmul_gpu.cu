@@ -76,22 +76,22 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
         // vectors from the shared memory storage to local register files.
         #pragma unroll
         for (uint i = 0; i < 8; ++ i) {
-            float local_a, local_b[4];
+            float local_a[4], local_b;
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_b[j] = storage_b.get(k / 8 % 2, i, warp_idx * 4 + j);
-            local_a = storage_a.get(k / 8 % 2, i, lane_idx);
+                local_a[j] = storage_a.get(k / 8 % 2, i, warp_idx * 4 + j);
+            local_b = storage_b.get(k / 8 % 2, i, lane_idx);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a * local_b[j];
+                accumulator[j] += local_a[j] * local_b;
         }
     }
     // Write the accumulated matrix multiplication results to the global memory.
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
+                 + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
 }
 /*
 
