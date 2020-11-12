@@ -131,12 +131,12 @@ public:
         } else {
             from = to = { x, y };
         }*/
-        //if (trans) {
-        //    from.x = to.y = threadIdx.x % tile_storage::ROWS;
-        //    from.y = to.x = threadIdx.x / tile_storage::ROWS;
-        //} else {
+        if (trans) {
+            from.x = to.y = threadIdx.x % tile_storage::ROWS;
+            from.y = to.x = threadIdx.x / tile_storage::ROWS;
+        } else {
             from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
-        //}
+        }
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
