@@ -10,7 +10,7 @@
 #include "sparse_layout.cuh"
 #include "tiling_mma.cuh"
 
-/*
+
 #define LAUNCH_BOUNDS(T, ROWS, COLUMNS)                                     \
     __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,                      \
                       2048 / tile<T, ROWS, COLUMNS>::THREADS)
@@ -24,7 +24,7 @@
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256 - for single precision
  *                        128 - for half precision
- *
+ */
 __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
@@ -93,7 +93,7 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
                  + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
 }
-*/
+/*
 
 class tile_storage {
 public:
@@ -157,7 +157,7 @@ private:
  * 
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256
- */
+ *
 __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
@@ -227,7 +227,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
                  + (warp_idx * 4 + i) * 32
                  + lane_idx] = accumulator[i];
 }
-
+*/
 
 torch::Tensor sparse_matmul(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
