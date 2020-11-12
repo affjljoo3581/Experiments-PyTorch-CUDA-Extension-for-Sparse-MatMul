@@ -47,7 +47,7 @@ struct tile {
         constexpr static int SIZE = (ROWS * STRIDE + SKEWS + 32 - 1) / 32 * 32;
 
         __device__ __forceinline__ packed_t& get(int page, int i, int j) {
-            return data[page][i * STRIDE + j / PACKED + (i * STRIDE / BANKS)];
+            return data[page][i * STRIDE + j / PACKED];// + (i * STRIDE / BANKS)];
         }
     private:
         packed_t data[PAGES][SIZE];
