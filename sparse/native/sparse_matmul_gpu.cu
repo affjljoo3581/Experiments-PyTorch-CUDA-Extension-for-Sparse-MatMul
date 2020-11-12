@@ -218,6 +218,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         for (uint i = 0; i < 8; ++ i) {
             float local_a[4], local_b;
 
+            __syncwarp();
+
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
                 local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
