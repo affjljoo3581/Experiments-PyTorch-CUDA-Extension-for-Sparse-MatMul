@@ -44,15 +44,15 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     uint n = block.col() * 32;
 
     // Define shared tile storages, loaders and accumulator.
-    __shared__ tile<float, 8, 32>::storage storage_a, storage_b;
+    __shared__ tile<float, 32, 8>::storage storage_a, storage_b;
 
-    tile<float, 8, 32>::loader loader_a(
+    tile<float, 32, 8>::loader loader_a(
         &matrix_a[blockIdx.y * size_m * size_k],
-        storage_a, trans_a ? size_m : size_k, !trans_a
+        storage_a, trans_a ? size_m : size_k, trans_a
     );
-    tile<float, 8, 32>::loader loader_b(
+    tile<float, 32, 8>::loader loader_b(
         &matrix_b[blockIdx.y * size_k * size_n],
-        storage_b, trans_b ? size_k : size_n, trans_b
+        storage_b, trans_b ? size_k : size_n, !trans_b
     );
 
     // Prefetch first tiles from the global memory.
@@ -80,8 +80,8 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = storage_a.get(k / 8 % 2, i, warp_idx * 4 + j);
-            local_b = storage_b.get(k / 8 % 2, i, lane_idx);
+                local_a[j] = storage_a.get(k / 8 % 2, warp_idx * 4 + j, i);
+            local_b = storage_b.get(k / 8 % 2, lane_idx, i);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
@@ -91,7 +91,7 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     // Write the accumulated matrix multiplication results to the global memory.
     for (uint i = 0; i < 4; ++ i)
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
+                 + lane_idx * 32 + (warp_idx * 4 + i)] = accumulator[i];
 }
 /*
 

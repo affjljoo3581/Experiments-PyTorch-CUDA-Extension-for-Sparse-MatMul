@@ -37,7 +37,6 @@ struct tile {
      * 
      * Note that `storage` object must be defined in shared memory.
      */
-    /*
     class storage {
     public:
         constexpr static int PAGES = 2;
@@ -49,20 +48,6 @@ struct tile {
 
         __device__ __forceinline__ packed_t& get(int page, int i, int j) {
             return data[page][i * STRIDE + j / PACKED + (i * STRIDE / BANKS)];
-        }
-    private:
-        packed_t data[PAGES][SIZE];
-    };*/
-    class storage {
-    public:
-        constexpr static int PAGES = 2;
-
-        constexpr static int STRIDE = COLUMNS + 1;
-
-        constexpr static int SIZE = (ROWS * STRIDE + 32 - 1) / 32 * 32;
-
-        __device__ __forceinline__ packed_t& get(int page, int i, int j) {
-            return data[page][i * STRIDE + j];
         }
     private:
         packed_t data[PAGES][SIZE];
@@ -122,14 +107,11 @@ struct tile {
             const T* __restrict__ src, storage &dst, int stride, bool trans
         ) : src(src), dst(dst), stride(stride)
         {
-            int x = threadIdx.x % COLUMNS;
-            int y = threadIdx.x / COLUMNS;
-
             if (trans) {
-                from.x = to.y = x % ROWS;
-                from.y = to.x = x / ROWS * ROWS + y;
+                from.x = to.y = threadIdx.x % ROWS;
+                from.y = to.x = threadIdx.x / ROWS;
             } else {
-                from = to = { x, y };
+                from = to = { threadIdx.x % COLUMNS, threadIdx.x / COLUMNS };
             }
         }
 
