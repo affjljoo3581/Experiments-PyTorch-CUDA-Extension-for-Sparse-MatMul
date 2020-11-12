@@ -112,7 +112,7 @@ struct tile {
                 from.y = to.x = threadIdx.x / ROWS;
             } else {
                 from = to = { threadIdx.x % COLUMNS, threadIdx.x / COLUMNS };
-                to = { threadIdx.x / ROWS, threadIdx.x % COLUMNS };
+                to = { threadIdx.x / ROWS, threadIdx.x % ROWS };
             }
         }
 
