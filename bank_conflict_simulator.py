@@ -54,7 +54,6 @@ class MyThread(Thread):
         self.page = 0
 
     def run(self):
-        '''
         x = self.tid % (self.ROWS if self.trans else self.COLUMNS)
         y = self.tid // (self.ROWS if self.trans else self.COLUMNS)
         self.shared_mem.access(self, self.indexor.get(
@@ -66,6 +65,7 @@ class MyThread(Thread):
             self.page, warp_idx * 4 + warp_idx % 4, lane_idx // 4
         ))
 
+        '''
         self.page = 0 if self.page == 1 else 1
 
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     indexor = Indexor(PACKED, BANKS, PAGES, STRIDE, SIZE)
     threads = MyThread.create(
-        MyThread, THREADS, mem, indexor, ROWS, COLUMNS, True)
+        MyThread, THREADS, mem, indexor, ROWS, COLUMNS, False)
 
     for t in threads:
         t.run()

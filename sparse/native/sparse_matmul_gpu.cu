@@ -10,7 +10,7 @@
 #include "sparse_layout.cuh"
 #include "tiling_mma.cuh"
 
-
+/*
 #define LAUNCH_BOUNDS(T, ROWS, COLUMNS)                                     \
     __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,                      \
                       2048 / tile<T, ROWS, COLUMNS>::THREADS)
@@ -24,7 +24,7 @@
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256 - for single precision
  *                        128 - for half precision
- */
+ *
 __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
@@ -94,20 +94,20 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
         matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
                  + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
 }
-/*
+/*/
 
 class tile_storage {
 public:
-    constexpr static uint ROWS      = 8;
-    constexpr static uint COLUMNS   = 32;
+    constexpr static uint ROWS      = 32;
+    constexpr static uint COLUMNS   = 8;
 
     constexpr static uint SKEW      = 1;
-    constexpr static uint STRIDE    = COLUMNS + SKEW;
+    constexpr static uint STRIDE    = COLUMNS;
 
-    constexpr static uint SIZE      = (ROWS * STRIDE + 32 - 1) / 32 * 32;
+    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        return buffers[page][i * STRIDE + j];
+        return buffers[page][i * STRIDE + j + i * STRIDE / 32];
     }
 private:
     float buffers[2][SIZE];
@@ -121,6 +121,7 @@ public:
                                            uint stride, bool trans)
         : src(src), storage(storage), stride(stride)
     {
+        /*
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
 
@@ -129,6 +130,12 @@ public:
             from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
         } else {
             from = to = { x, y };
+        }*/
+        if (trans) {
+            from.x = to.y = threadIdx.x % tile_storage::ROWS;
+            from.y = to.x = threadIdx.x / tile_storage::ROWS;
+        } else {
+            from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
         }
     }
 
@@ -158,7 +165,7 @@ private:
  * 
  * Blocks               : (Sparse Blocks, Total Batches)
  * Threads per Block    : 256
- *
+ */
 __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
@@ -174,9 +181,9 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     __shared__ tile_storage tile_a, tile_b;
 
     tile_loader loader_a(matrix_a + blockIdx.y * size_m * size_k,
-                         tile_a, trans_a ? size_m : size_k, !trans_a);
+                         tile_a, trans_a ? size_m : size_k, trans_a);
     tile_loader loader_b(matrix_b + blockIdx.y * size_k * size_n,
-                         tile_b, trans_b ? size_k : size_n, trans_b);
+                         tile_b, trans_b ? size_k : size_n, !trans_b);
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
@@ -213,8 +220,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, i, warp_idx * 4 + j);
-            local_b = tile_b.get(page, i, lane_idx);
+                local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
+            local_b = tile_b.get(page, lane_idx, i);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
@@ -228,7 +235,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
                  + (warp_idx * 4 + i) * 32
                  + lane_idx] = accumulator[i];
 }
-*/
+
 
 torch::Tensor sparse_matmul(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
