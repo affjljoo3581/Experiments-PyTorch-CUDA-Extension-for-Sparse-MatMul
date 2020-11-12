@@ -72,6 +72,7 @@ struct tile {
      * 
      * 
      */
+    /*
     class loader {
     public:
         __device__ __forceinline__ loader(
@@ -101,7 +102,7 @@ struct tile {
                 x = x / 2 + y % 2;
                 y = y / 2 * 2;
             }
-            */
+            *
             dst.get(page, trans ? x : y, trans ? y : x) = buffer;
         }
     private:
@@ -112,5 +113,57 @@ struct tile {
 
         int x, y, stride;
         bool trans;
+    };
+    */
+
+    class loader {
+    public:
+        __device__ __forceinline__ loader(
+            const T* __restrict__ src, storage &dst, int stride, bool trans
+        ) : src(src), dst(dst), stride(stride)
+        {
+            int x = threadIdx.x % tile_storage::COLUMNS;
+            int y = threadIdx.x / tile_storage::COLUMNS;
+
+            if (trans) {
+                from.x = to.y = x % tile_storage::ROWS;
+                from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
+            } else {
+                from = to = { x, y };
+            }
+        }
+
+        __device__ __forceinline__ void prefetch(int row, int col) {
+            buffer = *(packed_t *) &src[(row + from.y) * stride + (col + from.x)];
+        }
+
+        __device__ __forceinline__ void commit(int page) {
+            /*
+            if (std::is_same<T, half>::value && trans) {
+                half2 coupled = *(half2 *) &buffer;
+                half2 neighbor = __shfl_xor_sync(
+                    0xffffffff, coupled, COLUMNS / 2, warpSize);
+
+                if (y % 2 == 0) coupled = __lows2half2(coupled, neighbor);
+                else coupled = __highs2half2(neighbor, coupled);
+
+                buffer = *(packed_t *) &coupled;
+
+                x = x / 2 + y % 2;
+                y = y / 2 * 2;
+            }
+            */
+            dst.get(page, to.y, to.x) = buffer;
+        }
+    private:
+        packed_t buffer;
+
+        const T* __restrict__ src;
+        storage &dst;
+
+        int stride;
+        bool trans;
+
+        int2 from, to;
     };
 };
