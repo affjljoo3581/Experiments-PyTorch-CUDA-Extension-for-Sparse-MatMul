@@ -122,12 +122,12 @@ struct tile {
             const T* __restrict__ src, storage &dst, int stride, bool trans
         ) : src(src), dst(dst), stride(stride)
         {
-            int x = threadIdx.x % tile_storage::COLUMNS;
-            int y = threadIdx.x / tile_storage::COLUMNS;
+            int x = threadIdx.x % COLUMNS;
+            int y = threadIdx.x / COLUMNS;
 
             if (trans) {
-                from.x = to.y = x % tile_storage::ROWS;
-                from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
+                from.x = to.y = x % ROWS;
+                from.y = to.x = x / ROWS * ROWS + y;
             } else {
                 from = to = { x, y };
             }
