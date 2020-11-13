@@ -94,10 +94,10 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
             local_b[0] = tile_b[page][(tid % 16 * 2 + 0) * 8 + i + (tid % 16 / 2)];
             local_b[1] = tile_b[page][(tid % 16 * 2 + 1) * 8 + i + (tid % 16 / 2)];
 
-            accum[0][0] = local_a[0] * local_b[0];
-            accum[0][1] = local_a[0] * local_b[1];
-            accum[1][0] = local_a[1] * local_b[0];
-            accum[1][1] = local_a[1] * local_b[1];
+            accum[0][0] += local_a[0] * local_b[0];
+            accum[0][1] += local_a[0] * local_b[1];
+            accum[1][0] += local_a[1] * local_b[0];
+            accum[1][1] += local_a[1] * local_b[1];
         }
     }
 
