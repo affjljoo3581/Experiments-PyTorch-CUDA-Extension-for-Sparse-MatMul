@@ -9,7 +9,7 @@
 #include "sparse_kernels.h"
 #include "sparse_layout.cuh"
 
-#define USE_32x32_TILING_NO_BUFFERING
+#define USE_32x8_TILING
 
 /**
  * Compute sparse matrix multiplication with SDD mode.
