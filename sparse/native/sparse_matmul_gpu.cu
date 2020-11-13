@@ -8,153 +8,6 @@
 
 #include "sparse_kernels.h"
 #include "sparse_layout.cuh"
-#include "tiling_mma.cuh"
-
-/*
-#define LAUNCH_BOUNDS(T, ROWS, COLUMNS)                                     \
-    __launch_bounds__(tile<T, ROWS, COLUMNS>::THREADS,                      \
-                      2048 / tile<T, ROWS, COLUMNS>::THREADS)
-
-/**
- * Compute sparse matrix multiplication with SDD mode.
- * 
- * It computes a multiplication with a dense matrix with other dense matrix and
- * create a new sparse matrix through corresponding sparse layout.
- * 
- * Blocks               : (Sparse Blocks, Total Batches)
- * Threads per Block    : 256 - for single precision
- *                        128 - for half precision
- *
-__global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
-    const float* __restrict__ matrix_a,
-    const float* __restrict__ matrix_b,
-          float* __restrict__ matrix_c,
-    sparse_layout layout, uint num_blocks,
-    uint size_m, uint size_n, uint size_k,
-    bool trans_a, bool trans_b
-) {
-    float accumulator[4] = { 0.0f, };
-
-    uint lane_idx = threadIdx.x % warpSize;
-    uint warp_idx = threadIdx.x / warpSize;
-
-    // Fetch current block and get corresponding row and column indices.
-    auto block = layout.get(blockIdx.x);
-    uint m = block.row() * 32;
-    uint n = block.col() * 32;
-
-    // Define shared tile storages, loaders and accumulator.
-    __shared__ tile<float, 32, 8>::storage storage_a, storage_b;
-
-    tile<float, 32, 8>::loader loader_a(
-        &matrix_a[blockIdx.y * size_m * size_k],
-        storage_a, trans_a ? size_m : size_k, trans_a
-    );
-    tile<float, 32, 8>::loader loader_b(
-        &matrix_b[blockIdx.y * size_k * size_n],
-        storage_b, trans_b ? size_k : size_n, !trans_b
-    );
-
-    // Prefetch first tiles from the global memory.
-    loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
-    loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
-
-    #pragma unroll 1
-    for (uint k = 0; k < size_k; k += 8) {
-        // Move the prefetched global memory data to the shared memory storage.
-        loader_a.commit(k / 8 % 2);
-        loader_b.commit(k / 8 % 2);
-        __syncthreads();
-
-        // Prefetch next tiles from the global memory if available.
-        if (k + 8 < size_k) {
-            loader_a.prefetch(trans_a ? k + 8 : m, trans_a ? m : k + 8);
-            loader_b.prefetch(trans_b ? n : k + 8, trans_b ? k + 8 : n);
-        }
-
-        // Accumulate the tiled matrix multiplications by loading the sliced
-        // vectors from the shared memory storage to local register files.
-        #pragma unroll
-        for (uint i = 0; i < 8; ++ i) {
-            float local_a[4], local_b;
-
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                local_a[j] = storage_a.get(k / 8 % 2, warp_idx * 4 + j, i);
-            local_b = storage_b.get(k / 8 % 2, lane_idx, i);
-
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a[j] * local_b;
-        }
-    }
-
-    // Write the accumulated matrix multiplication results to the global memory.
-    for (uint i = 0; i < 4; ++ i)
-        matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + (warp_idx * 4 + i) * 32 + lane_idx] = accumulator[i];
-}
-/*/
-
-class tile_storage {
-public:
-    constexpr static uint ROWS      = 8;
-    constexpr static uint COLUMNS   = 32;
-
-    constexpr static uint SKEW      = 1;
-    constexpr static uint STRIDE    = COLUMNS;
-
-    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
-
-    __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        int t = i * 32 + j;
-        return buffers[page][t / 32 * 33 + t % 32];
-    }
-private:
-    float buffers[2][1024];//32 * 8 + 8 + 24];
-};
-
-
-class tile_loader {
-public:
-    __device__ __forceinline__ tile_loader(const float* __restrict__ src,
-                                           tile_storage& storage,
-                                           uint stride, bool trans)
-        : src(src), storage(storage), stride(stride)
-    {
-        uint x = threadIdx.x % tile_storage::COLUMNS;
-        uint y = threadIdx.x / tile_storage::COLUMNS;
-
-        if (trans) {
-            from.x = to.y = x % tile_storage::ROWS;
-            from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
-        } else {
-            from = to = { x, y };
-        }/*/
-        if (trans) {
-            from.x = to.y = threadIdx.x % tile_storage::ROWS;
-            from.y = to.x = threadIdx.x / tile_storage::ROWS;
-        } else {
-            from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
-        }*/
-    }
-
-    __device__ __forceinline__ void prefetch(uint row, uint col) {
-        buffer = src[(row + from.y) * stride + (col + from.x)];
-    }
-
-    __device__ __forceinline__ void commit(uint page) {
-        storage.get(page, to.y, to.x) = buffer;
-    }
-private:
-    const float* __restrict__ src;
-    uint stride;
-
-    tile_storage& storage;
-    float buffer;
-
-    uint2 from, to;
-};
 
 
 /**
@@ -174,66 +27,87 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     uint size_m, uint size_n, uint size_k,
     bool trans_a, bool trans_b
 ) {
-    uint lane_idx = threadIdx.x % 32;
-    uint warp_idx = threadIdx.x / 32;
+    /******** Define shared memory ********/
+    constexpr int TILE_SIZE = 32 * 8;
+    constexpr int PADDING = 8;
 
-    // Define shared tile storages and tile loaders.
-    __shared__ tile_storage tile_a, tile_b;
+    __shared__ float tile_a[2][(TILE_SIZE + PADDING + 32 - 1) / 32 * 32];
+    __shared__ float tile_b[2][(TILE_SIZE + PADDING + 32 - 1) / 32 * 32];
 
-    tile_loader loader_a(matrix_a + blockIdx.y * size_m * size_k,
-                         tile_a, trans_a ? size_m : size_k, !trans_a);
-    tile_loader loader_b(matrix_b + blockIdx.y * size_k * size_n,
-                         tile_b, trans_b ? size_k : size_n, trans_b);
-
-    // Fetch current block and get corresponding row and column indices.
+    /******** Fetch sparse block descriptor ********/
     auto block = layout.get(blockIdx.x);
-    uint m = block.row() * 32;
-    uint n = block.col() * 32;
+    int m = block.row() * 32;
+    int n = block.col() * 32;
 
-    // Prefetch first tiles from the global memory.
-    loader_a.prefetch(trans_a ? 0 : m, trans_a ? m : 0);
-    loader_b.prefetch(trans_b ? n : 0, trans_b ? 0 : n);
+    /******** Define accumulator and warp informations ********/
+    float accum[2][2] = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
 
-    float accumulator[4] = { 0.0f, };
+    int tid = threadIdx.x;
 
+    /******** Prefetch first tiles ********/
+    int load_a = blockIdx.y * size_m * size_k;
+    int load_b = blockIdx.y * size_k * size_n;
+    
+    float buffer_a = matrix_a[
+        load_a
+        + ((trans_a ? 0 : m) + (trans_a ? tid / 32 : tid / 8)) * (trans_a ? size_m : size_k)
+        + ((trans_a ? m : 0) + (trans_a ? tid % 32 : tid % 8))
+    ];
+    float buffer_b = matrix_b[
+        load_b
+        + ((trans_b ? n : 0) + (trans_b ? tid / 8 : tid / 32)) * (trans_b ? size_k : size_m)
+        + ((trans_b ? 0 : n) + (trans_b ? tid % 8 : tid % 32))
+    ];
+
+    /******** Iterate over k-dim ********/
     #pragma unroll 1
-    for (uint k = 0; k < size_k; k += 8) {
-        uint page = k / 8 % 2;
-        uint next_k = k + 8;
+    for (int k = 0; k < size_k; k += 8) {
+        int page = k / 8 % 2;
+        int next_k = k + 8;
 
-        // Move the prefetched global memory values to the shared memory.
-        //loader_a.commit(page);
-        loader_b.commit(page);
+        /******** Commit the prefetched buffers to the shared memory ********/
+        tile_a[page][(trans_a ? tid % 32 : tid / 8) * 8 + (trans_a ? tid / 32 : tid % 8) + (trans_a ? tid % 32 / 4 : tid / 32)] = buffer_a;
+        tile_b[page][(trans_b ? tid / 8 : tid % 32) * 8 + (trans_b ? tid % 8 : tid / 32) + (trans_b ? tid / 32 : tid % 32 / 4)] = buffer_b;
         __syncthreads();
 
-        // Prefetch the next tiles from the global memory.
+        /******** Prefetch next tiles if available ********/
         if (next_k < size_k) {
-            loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
-            loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
+            buffer_a = matrix_a[
+                load_a
+                + ((trans_a ? next_k : m) + (trans_a ? tid / 32 : tid / 8)) * (trans_a ? size_m : size_k)
+                + ((trans_a ? m : next_k) + (trans_a ? tid % 32 : tid % 8))
+            ];
+            buffer_b = matrix_b[
+                load_b
+                + ((trans_b ? n : next_k) + (trans_b ? tid / 8 : tid / 32)) * (trans_b ? size_k : size_m)
+                + ((trans_b ? next_k : n) + (trans_b ? tid % 8 : tid % 32))
+            ];
         }
 
-        // Accumulate the tiled matrix multiplications by loading the sliced
-        // vectors from shared memory to local register files.
+        /******** Accumulate tile matmul by using register file ********/
         #pragma unroll
-        for (uint i = 0; i < 8; ++ i) {
-            float local_a[4], local_b = 1;
+        for (int i = 0; i < 8; ++ i) {
+            float local_a[2], local_b[2];
 
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
-            local_b = tile_b.get(page, lane_idx, i);
+            local_a[0] = tile_a[page][(tid / 16 * 2 + 0) * 8 + i + (tid / 32)];
+            local_a[1] = tile_a[page][(tid / 16 * 2 + 1) * 8 + i + (tid / 32)];
+            local_b[0] = tile_b[page][(tid % 16 * 2 + 0) * 8 + i + (tid % 16 / 2)];
+            local_b[1] = tile_b[page][(tid % 16 * 2 + 1) * 8 + i + (tid % 16 / 2)];
 
-            #pragma unroll
-            for (uint j = 0; j < 4; ++ j)
-                accumulator[j] += local_a[j] * local_b;
+            accum[0][0] = local_a[0] * local_b[0];
+            accum[0][1] = local_a[0] * local_b[1];
+            accum[1][0] = local_a[1] * local_b[0];
+            accum[1][1] = local_a[1] * local_b[1];
         }
     }
 
-    #pragma unroll
-    for (uint i = 0; i < 4; ++ i)
-        matrix_c[(blockIdx.y * num_blocks + block.idx()) * 32 * 32
-                 + (warp_idx * 4 + i) * 32
-                 + lane_idx] = accumulator[i];
+    /******** Apply accumulation to output matrix ********/
+    int load_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 0)] = accum[0][0];
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 1)] = accum[0][1];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 0)] = accum[1][0];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 1)] = accum[1][1];
 }
 
 
