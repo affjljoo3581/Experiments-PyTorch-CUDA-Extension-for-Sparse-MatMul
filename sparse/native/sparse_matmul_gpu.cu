@@ -208,8 +208,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
         // Prefetch the next tiles from the global memory.
         if (next_k < size_k) {
-            //loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
-            //loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
+            loader_a.prefetch(trans_a ? next_k : m, trans_a ? m : next_k);
+            loader_b.prefetch(trans_b ? n : next_k, trans_b ? next_k : n);
         }
 
         // Accumulate the tiled matrix multiplications by loading the sliced
