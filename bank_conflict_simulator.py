@@ -1,3 +1,4 @@
+import numpy as np
 from typing import List, Any
 
 
@@ -54,7 +55,6 @@ class MyThread(Thread):
         self.page = 0
 
     def run(self):
-        '''
         x = self.tid % (self.ROWS if self.trans else self.COLUMNS)
         y = self.tid // (self.ROWS if self.trans else self.COLUMNS)
         self.shared_mem.access(self, self.indexor.get(
@@ -65,6 +65,7 @@ class MyThread(Thread):
         self.shared_mem.access(self, self.indexor.get(
             self.page, lane_idx, 7
         ))
+        '''
 
         self.page = 0 if self.page == 1 else 1
 
@@ -96,6 +97,8 @@ if __name__ == '__main__':
     for wid in range(WARPS):
         print(set(mem.warp_bank_access(wid)))
 
+    print(np.array(mem.access_pattern).reshape(-1, 32))
+
     mem.clear_access()
     print('=' * 200)
 
@@ -104,3 +107,5 @@ if __name__ == '__main__':
 
     for wid in range(WARPS):
         print(set(mem.warp_bank_access(wid)))
+
+    print(np.array(mem.access_pattern).reshape(-1, 32))
