@@ -145,12 +145,12 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     
     float buffer_a = matrix_a[
         load_a
-        + ((trans_a ? 0 : m) + (trans_a ? tid / 32 : tid / 8 % 4 + tid / 32 * 4)) * (trans_a ? size_m : size_k)
+        + ((trans_a ? 0 : m) + (trans_a ? tid / 32 : tid / 8 % 4 * 8 + tid / 32)) * (trans_a ? size_m : size_k)
         + ((trans_a ? m : 0) + (trans_a ? tid % 32 : tid % 8))
     ];
     float buffer_b = matrix_b[
         load_b
-        + ((trans_b ? n : 0) + (trans_b ? tid / 8 % 4 + tid / 32 * 4 : tid / 32)) * (trans_b ? size_k : size_m)
+        + ((trans_b ? n : 0) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid / 32)) * (trans_b ? size_k : size_m)
         + ((trans_b ? 0 : n) + (trans_b ? tid % 8 : tid % 32))
     ];
 
@@ -161,20 +161,20 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         int next_k = k + 8;
 
         /******** Commit the prefetched buffers to the shared memory ********/
-        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (8 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 + tid / 32 * 4)] = buffer_a;
-        tile_b[page][(trans_b ? tid % 8 : tid / 32) * (8 + 1) + (trans_b ? tid / 8 % 4 + tid / 32 * 4 : tid % 32)] = buffer_b;
+        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (8 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 * 8 + tid / 32] = buffer_a;
+        tile_b[page][(trans_b ? tid % 8 : tid / 32) * (8 + 1) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid % 32)] = buffer_b;
         __syncthreads();
 
         /******** Prefetch next tiles if available ********/
         if (next_k < size_k) {
             buffer_a = matrix_a[
                 load_a
-                + ((trans_a ? next_k : m) + (trans_a ? tid / 32 : tid / 8 % 4 + tid / 32 * 4)) * (trans_a ? size_m : size_k)
+                + ((trans_a ? next_k : m) + (trans_a ? tid / 32 : tid / 8 % 4 * 8 + tid / 32)) * (trans_a ? size_m : size_k)
                 + ((trans_a ? m : next_k) + (trans_a ? tid % 32 : tid % 8))
             ];
             buffer_b = matrix_b[
                 load_b
-                + ((trans_b ? n : next_k) + (trans_b ? tid / 8 % 4 + tid / 32 * 4 : tid / 32)) * (trans_b ? size_k : size_m)
+                + ((trans_b ? n : next_k) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid / 32)) * (trans_b ? size_k : size_m)
                 + ((trans_b ? next_k : n) + (trans_b ? tid % 8 : tid % 32))
             ];
         }
