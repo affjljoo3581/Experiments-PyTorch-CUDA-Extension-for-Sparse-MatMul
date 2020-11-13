@@ -202,8 +202,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         uint next_k = k + 8;
 
         // Move the prefetched global memory values to the shared memory.
-        loader_a.commit(page);
-        //loader_b.commit(page);
+        //loader_a.commit(page);
+        loader_b.commit(page);
         __syncthreads();
 
         // Prefetch the next tiles from the global memory.
