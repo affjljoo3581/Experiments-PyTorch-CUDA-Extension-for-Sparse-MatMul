@@ -217,12 +217,12 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         // vectors from shared memory to local register files.
         #pragma unroll
         for (uint i = 0; i < 8; ++ i) {
-            float local_a[4], local_b;
+            float local_a[4], local_b = 1;
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
                 local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
-            local_b = tile_b.get(page, warp_idx /* lane_idx */, i);
+            //local_b = tile_b.get(page, warp_idx /* lane_idx */, i);
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
