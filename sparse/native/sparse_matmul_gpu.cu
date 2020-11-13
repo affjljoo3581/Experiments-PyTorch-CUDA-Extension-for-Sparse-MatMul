@@ -107,7 +107,7 @@ public:
     constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
-        return buffers[page][i * STRIDE + j + i * STRIDE / 32];
+        return buffers[page][i * STRIDE + j];// + i * STRIDE / 32];
     }
 private:
     float buffers[2][SIZE];
