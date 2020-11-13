@@ -104,14 +104,14 @@ public:
     constexpr static uint SKEW      = 1;
     constexpr static uint STRIDE    = COLUMNS;
 
-    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32 + 128;
+    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
         int t = i * 8 + j;
         return buffers[page][t / 32 * 33 + t % 32];
     }
 private:
-    float buffers[2][32 * 8 + 8 + 24];
+    float buffers[2][512];//32 * 8 + 8 + 24];
 };
 
 
