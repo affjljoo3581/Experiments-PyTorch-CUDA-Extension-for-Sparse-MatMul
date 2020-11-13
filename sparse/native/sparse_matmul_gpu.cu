@@ -221,7 +221,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
             #pragma unroll
             for (uint j = 0; j < 4; ++ j)
-                local_a[j] = tile_a.get(page, warp_idx * 4 + j, i);
+                local_a[j] = tile_a.get(page, j, i);//warp_idx * 4 + j, i);
             //local_b = tile_b.get(page, warp_idx /* lane_idx */, i);
 
             #pragma unroll
