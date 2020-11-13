@@ -161,7 +161,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         int next_k = k + 8;
 
         /******** Commit the prefetched buffers to the shared memory ********/
-        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (8 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 * 8 + tid / 32] = buffer_a;
+        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (8 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 * 8 + tid / 32)] = buffer_a;
         tile_b[page][(trans_b ? tid % 8 : tid / 32) * (8 + 1) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid % 32)] = buffer_b;
         __syncthreads();
 
