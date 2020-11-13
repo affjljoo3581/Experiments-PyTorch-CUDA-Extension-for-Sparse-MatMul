@@ -161,8 +161,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         int next_k = k + 8;
 
         /******** Commit the prefetched buffers to the shared memory ********/
-        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (8 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 * 8 + tid / 32)] = buffer_a;
-        tile_b[page][(trans_b ? tid % 8 : tid / 32) * (8 + 1) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid % 32)] = buffer_b;
+        tile_a[page][(trans_a ? tid / 32 : tid % 8) * (32 + 1) + (trans_a ? tid % 32 : tid / 8 % 4 * 8 + tid / 32)] = buffer_a;
+        tile_b[page][(trans_b ? tid % 8 : tid / 32) * (32 + 1) + (trans_b ? tid / 8 % 4 * 8 + tid / 32 : tid % 32)] = buffer_b;
         __syncthreads();
 
         /******** Prefetch next tiles if available ********/
@@ -184,10 +184,10 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         for (int i = 0; i < 8; ++ i) {
             float local_a[2], local_b[2];
 
-            local_a[0] = tile_a[page][i * (8 + 1) + (tid / 16 * 2 + 0)];
-            local_a[1] = tile_a[page][i * (8 + 1) + (tid / 16 * 2 + 1)];
-            local_b[0] = tile_b[page][i * (8 + 1) + (tid % 16 * 2 + 0)];
-            local_b[1] = tile_b[page][i * (8 + 1) + (tid % 16 * 2 + 1)];
+            local_a[0] = tile_a[page][i * (32 + 1) + (tid / 16 * 2 + 0)];
+            local_a[1] = tile_a[page][i * (32 + 1) + (tid / 16 * 2 + 1)];
+            local_b[0] = tile_b[page][i * (32 + 1) + (tid % 16 * 2 + 0)];
+            local_b[1] = tile_b[page][i * (32 + 1) + (tid % 16 * 2 + 1)];
 
             accum[0][0] += local_a[0] * local_b[0];
             accum[0][1] += local_a[0] * local_b[1];
