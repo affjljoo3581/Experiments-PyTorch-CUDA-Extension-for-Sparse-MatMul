@@ -104,7 +104,7 @@ public:
     constexpr static uint SKEW      = 1;
     constexpr static uint STRIDE    = COLUMNS;
 
-    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32;
+    constexpr static uint SIZE      = (ROWS * STRIDE + COLUMNS + 32 - 1) / 32 * 32 + 128;
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
         int t = i * 8 + j;
