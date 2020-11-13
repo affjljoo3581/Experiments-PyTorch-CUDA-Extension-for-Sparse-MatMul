@@ -207,13 +207,14 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 #endif
 
 #ifdef USE_32x32_TILING
+template <bool trans_a, bool trans_b>
 __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
     sparse_layout layout, uint num_blocks,
-    uint size_m, uint size_n, uint size_k,
-    bool trans_a, bool trans_b
+    uint size_m, uint size_n, uint size_k
+    //bool trans_a, bool trans_b
 ) {
     /******** Define shared memory ********/
     __shared__ float tile_a[2][32 * (32 + 1)];
@@ -348,13 +349,13 @@ torch::Tensor sparse_matmul(
     else blocks = dim3(num_batches,
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
-    auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel :
-                  mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel :
-                                  sparse_matmul_sdd_32x32x8_kernel;
+    auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel<false, false> :
+                  mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<false, false> :
+                                  sparse_matmul_sdd_32x32x8_kernel<false, false>;
     kernel<<<blocks, 256>>>( //tile<float, 32, 8>::THREADS>>>(
         a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
-        layout, num_blocks, size_m, size_n, size_k,
-        trans_a, trans_b
+        layout, num_blocks, size_m, size_n, size_k //,
+        //trans_a, trans_b
     );
 
     // Return the output tensor with multiple batch dimensions.
