@@ -98,8 +98,8 @@ __global__ void LAUNCH_BOUNDS(float, 32, 8) sparse_matmul_sdd_32x32x8_kernel(
 
 class tile_storage {
 public:
-    constexpr static uint ROWS      = 32;
-    constexpr static uint COLUMNS   = 8;
+    constexpr static uint ROWS      = 8;
+    constexpr static uint COLUMNS   = 32;
 
     constexpr static uint SKEW      = 1;
     constexpr static uint STRIDE    = COLUMNS;
@@ -182,7 +182,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     __shared__ tile_storage tile_a, tile_b;
 
     tile_loader loader_a(matrix_a + blockIdx.y * size_m * size_k,
-                         tile_a, trans_a ? size_m : size_k, trans_a);
+                         tile_a, trans_a ? size_m : size_k, !trans_a);
     tile_loader loader_b(matrix_b + blockIdx.y * size_k * size_n,
                          tile_b, trans_b ? size_k : size_n, !trans_b);
 
@@ -203,7 +203,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         uint next_k = k + 8;
 
         // Move the prefetched global memory values to the shared memory.
-        //loader_a.commit(page);
+        loader_a.commit(page);
         //loader_b.commit(page);
         __syncthreads();
 
