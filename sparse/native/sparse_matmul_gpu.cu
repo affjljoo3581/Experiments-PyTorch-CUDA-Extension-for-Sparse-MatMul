@@ -108,10 +108,10 @@ public:
 
     __device__ __forceinline__ float& get(uint page, uint i, uint j) {
         int t = i * 8 + j;
-        return buffers[page][t / 32 * 34 + t % 32];
+        return buffers[page][t / 32 * 64 + t % 32];
     }
 private:
-    float buffers[2][512];//32 * 8 + 8 + 24];
+    float buffers[2][1024];//32 * 8 + 8 + 24];
 };
 
 
