@@ -362,7 +362,7 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
         #pragma unroll
         for (int i = 0; i < 4; ++ i) {
             tile_a[(trans_a ? tid % 32 : tid / 32 + i * 8) * (32 + 1) + (trans_a ? tid / 32 + i * 8 : tid % 32)] = buffer_a[i];
-            tile_b(trans_b ? tid / 32 + i * 8 : tid % 32) * (32 + 1) + (trans_b ? tid % 32 : tid / 32 + i * 8)] = buffer_b[i];
+            tile_b[(trans_b ? tid / 32 + i * 8 : tid % 32) * (32 + 1) + (trans_b ? tid % 32 : tid / 32 + i * 8)] = buffer_b[i];
         }
         __syncthreads();
 
