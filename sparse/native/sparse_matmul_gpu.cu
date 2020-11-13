@@ -208,7 +208,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 
 #ifdef USE_32x32_TILING
 template <bool trans_a, bool trans_b>
-__global__ void __launch_bounds__(256) sparse_matmul_sdd_32x32x8_kernel(
+__global__ void /*__launch_bounds__(256)*/ sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
