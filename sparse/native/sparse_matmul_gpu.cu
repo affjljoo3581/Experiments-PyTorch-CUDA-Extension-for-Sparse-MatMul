@@ -155,7 +155,7 @@ torch::Tensor sparse_matmul(
     auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel :
                   mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel :
                                   sparse_matmul_sdd_32x32x8_kernel;
-    kernel<<<blocks, tile<float, 32, 8>::THREADS>>>(
+    kernel<<<blocks, 256>>>( //tile<float, 32, 8>::THREADS>>>(
         a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
         layout, num_blocks, size_m, size_n, size_k,
         trans_a, trans_b
