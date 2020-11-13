@@ -122,7 +122,6 @@ public:
                                            uint stride, bool trans)
         : src(src), storage(storage), stride(stride)
     {
-        /*
         uint x = threadIdx.x % tile_storage::COLUMNS;
         uint y = threadIdx.x / tile_storage::COLUMNS;
 
@@ -131,13 +130,13 @@ public:
             from.y = to.x = x / tile_storage::ROWS * tile_storage::ROWS + y;
         } else {
             from = to = { x, y };
-        }*/
+        }/*/
         if (trans) {
             from.x = to.y = threadIdx.x % tile_storage::ROWS;
             from.y = to.x = threadIdx.x / tile_storage::ROWS;
         } else {
             from = to = { threadIdx.x % tile_storage::COLUMNS, threadIdx.x / tile_storage::COLUMNS };
-        }
+        }*/
     }
 
     __device__ __forceinline__ void prefetch(uint row, uint col) {
@@ -184,7 +183,7 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     tile_loader loader_a(matrix_a + blockIdx.y * size_m * size_k,
                          tile_a, trans_a ? size_m : size_k, !trans_a);
     tile_loader loader_b(matrix_b + blockIdx.y * size_k * size_n,
-                         tile_b, trans_b ? size_k : size_n, !trans_b);
+                         tile_b, trans_b ? size_k : size_n, trans_b);
 
     // Fetch current block and get corresponding row and column indices.
     auto block = layout.get(blockIdx.x);
@@ -203,8 +202,8 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
         uint next_k = k + 8;
 
         // Move the prefetched global memory values to the shared memory.
-        loader_a.commit(page);
-        //loader_b.commit(page);
+        //loader_a.commit(page);
+        loader_b.commit(page);
         __syncthreads();
 
         // Prefetch the next tiles from the global memory.
