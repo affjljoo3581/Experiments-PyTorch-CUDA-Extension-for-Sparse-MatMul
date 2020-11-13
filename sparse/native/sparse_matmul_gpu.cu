@@ -21,13 +21,13 @@
  * Threads per Block    : 256
  */
 #ifdef USE_32x8_TILING
+template <bool trans_a, bool trans_b>
 __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
     sparse_layout layout, uint num_blocks,
-    uint size_m, uint size_n, uint size_k,
-    bool trans_a, bool trans_b
+    uint size_m, uint size_n, uint size_k
 ) {
     /******** Define shared memory ********/
     constexpr int TILE_SIZE = 32 * 8;
@@ -114,13 +114,13 @@ __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
 #endif
 
 #ifdef USE_8x32_TILING
+template <bool trans_a, bool trans_b>
 __global__ void __launch_bounds__(256, 8) sparse_matmul_sdd_32x32x8_kernel(
     const float* __restrict__ matrix_a,
     const float* __restrict__ matrix_b,
           float* __restrict__ matrix_c,
     sparse_layout layout, uint num_blocks,
-    uint size_m, uint size_n, uint size_k,
-    bool trans_a, bool trans_b
+    uint size_m, uint size_n, uint size_k
 ) {
     /******** Define shared memory ********/
     constexpr int TILE_SIZE = 8 * 32;
