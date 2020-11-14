@@ -504,8 +504,10 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
     /******** Apply accumulation to output matrix ********/
     int load_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
 
-    *(float2 *) &matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2)] = *(float2 *) &accum[0][0];
-    *(float2 *) &matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2)] = *(float2 *) &accum[1][0];
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 0)] = accum[0][0];
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 1)] = accum[0][1];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 0)] = accum[1][0];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 1)] = accum[1][1];
 }
 #endif
 
