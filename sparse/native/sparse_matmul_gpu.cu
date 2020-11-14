@@ -444,12 +444,12 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
 
     buffer_a = *(float4 *) &matrix_a[
         load_a
-        + ((trans_a ? 0 : m) + i) * (trans_a ? size_m * size_k))
+        + ((trans_a ? 0 : m) + i) * (trans_a ? size_m : size_k)
         + ((trans_a ? m : 0) + j)
     ];
     buffer_b = *(float4 *) &matrix_b[
         load_b
-        + ((trans_a ? n : 0) + i) * (trans_a ? size_k * size_n))
+        + ((trans_a ? n : 0) + i) * (trans_a ? size_k : size_n)
         + ((trans_a ? 0 : n) + j)
     ];
 
@@ -474,12 +474,12 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
         if (next_k < size_k) {
             buffer_a = *(float4 *) &matrix_a[
                 load_a
-                + ((trans_a ? next_k : m) + tid / 8) * (trans_a ? size_m * size_k)
+                + ((trans_a ? next_k : m) + tid / 8) * (trans_a ? size_m : size_k)
                 + ((trans_a ? m : next_k) + tid % 8 * 4)
             ];
             buffer_b = *(float4 *) &matrix_b[
                 load_b
-                + ((trans_a ? n : next_k) + tid / 8) * (trans_a ? size_k * size_n)
+                + ((trans_a ? n : next_k) + tid / 8) * (trans_a ? size_k : size_n)
                 + ((trans_a ? next_k : n) + tid % 8 * 4)
             ];
         }
