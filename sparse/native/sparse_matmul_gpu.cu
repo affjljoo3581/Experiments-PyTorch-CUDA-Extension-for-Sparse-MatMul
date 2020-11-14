@@ -9,7 +9,7 @@
 #include "sparse_kernels.h"
 #include "sparse_layout.cuh"
 
-#define USE_32x32_TILING_NO_BUFFERING
+#define USE_32x32_TILING_FUSED_COPY
 
 /**
  * Compute sparse matrix multiplication with SDD mode.
@@ -381,6 +381,107 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
                     + ((trans_b ? next_k : n) + (tid % 32))
                 ];
             }
+        }
+
+        /******** Accumulate tile matmul by using register file ********/
+        #pragma unroll
+        for (int i = 0; i < 32; ++ i) {
+            float local_a[2], local_b[2];
+
+            local_a[0] = tile_a[(tid / 16 * 2 + 0) * (32 + 1) + i];
+            local_a[1] = tile_a[(tid / 16 * 2 + 1) * (32 + 1) + i];
+            local_b[0] = tile_b[(tid % 16 * 2 + 0) * (32 + 1) + i];
+            local_b[1] = tile_b[(tid % 16 * 2 + 1) * (32 + 1) + i];
+
+            accum[0][0] += local_a[0] * local_b[0];
+            accum[0][1] += local_a[0] * local_b[1];
+            accum[1][0] += local_a[1] * local_b[0];
+            accum[1][1] += local_a[1] * local_b[1];
+        }
+    }
+
+    /******** Apply accumulation to output matrix ********/
+    int load_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 0)] = accum[0][0];
+    matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 1)] = accum[0][1];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 0)] = accum[1][0];
+    matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 1)] = accum[1][1];
+}
+#endif
+
+#ifdef USE_32x32_TILING_FUSED_COPY
+template <bool trans_a, bool trans_b>
+__global__ void sparse_matmul_sdd_32x32x8_kernel(
+    const float* __restrict__ matrix_a,
+    const float* __restrict__ matrix_b,
+          float* __restrict__ matrix_c,
+    sparse_layout layout, uint num_blocks,
+    uint size_m, uint size_n, uint size_k
+    //bool trans_a, bool trans_b
+) {
+    /******** Define shared memory ********/
+    __shared__ float tile_a[32 * (32 + 1)];
+    __shared__ float tile_b[32 * (32 + 1)];
+
+    /******** Fetch sparse block descriptor ********/
+    auto block = layout.get(blockIdx.x);
+    int m = block.row() * 32;
+    int n = block.col() * 32;
+
+    /******** Define accumulator and warp informations ********/
+    float accum[2][2] = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
+
+    int tid = threadIdx.x;
+    int i = tid / 8;
+    int j = tid % 8 * 4;
+
+    /******** Prefetch first tiles ********/
+    int load_a = blockIdx.y * size_m * size_k;
+    int load_b = blockIdx.y * size_k * size_n;
+    
+    float4 buffer_a, buffer_b;
+
+    buffer_a = *(float4 *) &matrix_a[
+        load_a
+        + ((trans_a ? 0 : m) + i) * (trans_a ? size_m * size_k)
+        + ((trans_a ? m : 0) + j)
+    ];
+    buffer_b = *(float4 *) &matrix_b[
+        load_b
+        + ((trans_a ? n : 0) + i) * (trans_a ? size_k * size_n)
+        + ((trans_a ? 0 : n) + j)
+    ];
+
+    /******** Iterate over k-dim ********/
+    #pragma unroll 1
+    for (int k = 0; k < size_k; k += 32) {
+        int next_k = k + 32;
+
+        /******** Commit the prefetched buffers to the shared memory ********/
+        __syncthreads();
+        tile_a[(trans_a ? j + 0 : i) * (32 + 1) + (trans_a ? i : j + 0)] = buffer_a.x;
+        tile_a[(trans_a ? j + 1 : i) * (32 + 1) + (trans_a ? i : j + 1)] = buffer_a.y;
+        tile_a[(trans_a ? j + 2 : i) * (32 + 1) + (trans_a ? i : j + 2)] = buffer_a.z;
+        tile_a[(trans_a ? j + 3 : i) * (32 + 1) + (trans_a ? i : j + 3)] = buffer_a.w;
+        tile_b[(trans_a ? i : j + 0) * (32 + 1) + (trans_a ? j + 0 : i)] = buffer_b.x;
+        tile_b[(trans_a ? i : j + 1) * (32 + 1) + (trans_a ? j + 1 : i)] = buffer_b.y;
+        tile_b[(trans_a ? i : j + 2) * (32 + 1) + (trans_a ? j + 2 : i)] = buffer_b.z;
+        tile_b[(trans_a ? i : j + 3) * (32 + 1) + (trans_a ? j + 3 : i)] = buffer_b.w;
+        __syncthreads();
+
+        /******** Prefetch next tiles if available ********/
+        if (next_k < size_k) {
+            buffer_a = *(float4 *) &matrix_a[
+                load_a
+                + ((trans_a ? next_k : m) + tid / 8) * (trans_a ? size_m * size_k)
+                + ((trans_a ? m : next_k) + tid % 8 * 4)
+            ];
+            buffer_b = *(float4 *) &matrix_b[
+                load_b
+                + ((trans_a ? n : next_k) + tid / 8) * (trans_a ? size_k * size_n)
+                + ((trans_a ? next_k : n) + tid % 8 * 4)
+            ];
         }
 
         /******** Accumulate tile matmul by using register file ********/
