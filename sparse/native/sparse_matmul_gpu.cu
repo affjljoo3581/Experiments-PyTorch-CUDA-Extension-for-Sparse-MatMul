@@ -217,8 +217,8 @@ __global__ void __launch_bounds__(256, 3) sparse_matmul_sdd_32x32x8_kernel(
     //bool trans_a, bool trans_b
 ) {
     /******** Define shared memory ********/
-    __shared__ float tile_a[2][32 * (32 + 1)];
-    __shared__ float tile_b[2][32 * (32 + 1)];
+    __shared__ float tile_a[2 * 32 * (32 + 1)];
+    __shared__ float tile_b[2 * 32 * (32 + 1)];
 
     /******** Fetch sparse block descriptor ********/
     auto block = layout.get(blockIdx.x);
@@ -259,8 +259,8 @@ __global__ void __launch_bounds__(256, 3) sparse_matmul_sdd_32x32x8_kernel(
         /******** Commit the prefetched buffers to the shared memory ********/
         #pragma unroll
         for (int i = 0; i < 4; ++ i) {
-            tile_a[page][(trans_a ? tid % 32 : tid / 32 + i * 8) * (32 + 1) + (trans_a ? tid / 32 + i * 8 : tid % 32)] = buffer_a[i];
-            tile_b[page][(trans_b ? tid / 32 + i * 8 : tid % 32) * (32 + 1) + (trans_b ? tid % 32 : tid / 32 + i * 8)] = buffer_b[i];
+            tile_a[page * 32 * (32 + 1) + (trans_a ? tid % 32 : tid / 32 + i * 8) * (32 + 1) + (trans_a ? tid / 32 + i * 8 : tid % 32)] = buffer_a[i];
+            tile_b[page * 32 * (32 + 1) + (trans_b ? tid / 32 + i * 8 : tid % 32) * (32 + 1) + (trans_b ? tid % 32 : tid / 32 + i * 8)] = buffer_b[i];
         }
         __syncthreads();
 
@@ -286,10 +286,10 @@ __global__ void __launch_bounds__(256, 3) sparse_matmul_sdd_32x32x8_kernel(
         for (int i = 0; i < 32; ++ i) {
             float local_a[2], local_b[2];
 
-            local_a[0] = tile_a[page][(tid / 16 * 2 + 0) * (32 + 1) + i];
-            local_a[1] = tile_a[page][(tid / 16 * 2 + 1) * (32 + 1) + i];
-            local_b[0] = tile_b[page][(tid % 16 * 2 + 0) * (32 + 1) + i];
-            local_b[1] = tile_b[page][(tid % 16 * 2 + 1) * (32 + 1) + i];
+            local_a[0] = tile_a[page * 32 * (32 + 1) + (tid / 16 * 2 + 0) * (32 + 1) + i];
+            local_a[1] = tile_a[page * 32 * (32 + 1) + (tid / 16 * 2 + 1) * (32 + 1) + i];
+            local_b[0] = tile_b[page * 32 * (32 + 1) + (tid % 16 * 2 + 0) * (32 + 1) + i];
+            local_b[1] = tile_b[page * 32 * (32 + 1) + (tid % 16 * 2 + 1) * (32 + 1) + i];
 
             accum[0][0] += local_a[0] * local_b[0];
             accum[0][1] += local_a[0] * local_b[1];
