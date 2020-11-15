@@ -77,10 +77,10 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        if (k < size_k) {
-            *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-            *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
-        }
+        //if (k < size_k) {
+        //    *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+        //    *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+        //}
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
         // from the shared memory to local register file.
@@ -116,10 +116,10 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     result[3][1] = __low2half(accum[3][1]) + __high2half(accum[3][1]);
 
     // Write the accumulated results to the output matrix.
-    *(half2 *) &matrix_c[offset_c + (r + 0) * 32 + s] = *(half2 *) &result[0][0];
-    *(half2 *) &matrix_c[offset_c + (r + 1) * 32 + s] = *(half2 *) &result[1][0];
-    *(half2 *) &matrix_c[offset_c + (r + 2) * 32 + s] = *(half2 *) &result[2][0];
-    *(half2 *) &matrix_c[offset_c + (r + 3) * 32 + s] = *(half2 *) &result[3][0];
+    *(half2 *) &matrix_c[offset_c + (r + 0) * 32 + s] = *(half2 *) result[0];
+    *(half2 *) &matrix_c[offset_c + (r + 1) * 32 + s] = *(half2 *) result[1];
+    *(half2 *) &matrix_c[offset_c + (r + 2) * 32 + s] = *(half2 *) result[2];
+    *(half2 *) &matrix_c[offset_c + (r + 3) * 32 + s] = *(half2 *) result[3];
 }
 
 /**
