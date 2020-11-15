@@ -633,9 +633,9 @@ torch::Tensor sparse_matmul(
     else blocks = dim3(num_batches,
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
-    auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x8_kernel<false, false> :
-                  mode == "dsd" ? sparse_matmul_sdd_32x32x8_kernel<false, false> :
-                                  sparse_matmul_sdd_32x32x8_kernel<false, false>;
+    auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x32_kernel<false, false> :
+                  mode == "dsd" ? sparse_matmul_sdd_32x32x32_kernel<false, false> :
+                                  sparse_matmul_sdd_32x32x32_kernel<false, false>;
     kernel<<<blocks, 256>>>( //tile<float, 32, 8>::THREADS>>>(
         a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
         layout, num_blocks, size_m, size_n, size_k //,
