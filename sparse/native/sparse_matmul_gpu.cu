@@ -532,9 +532,12 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
     int n = block.col() * 32;
 
     // Get an offset of each matrix and calculate mapping indices.
-    int offset_a = blockIdx.y * size_m * size_k;
-    int offset_b = blockIdx.y * size_k * size_n;
+    int offset_a = blockIdx.y * size_m * size_k + (tr_a ? m : m * size_k);
+    int offset_b = blockIdx.y * size_k * size_n + (tr_b ? n * size_k : n);
     int offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
+    int stride_a = tr_a ? size_m : size_k;
+    int stride_b = tr_b ? size_k : size_n;
 
     int p = threadIdx.x / 8;
     int q = threadIdx.x % 8 * 4;
@@ -542,11 +545,11 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
     int s = threadIdx.x % 16 * 2;
 
     // Prefetch first tiles from matrices in global memory.
-    buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
-    buffer_b = *(float4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
+    buffer_a = *(float4 *) &matrix_a[offset_a + p * stride_a + q]; //(tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
+    buffer_b = *(float4 *) &matrix_b[offset_b + p * stride_b + q]; //(tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
 
-    #pragma unroll
-    for (int k = 32; k <= size_k; k += 32) {
+    #pragma unroll 1
+    for (int k = 0; k < size_k; k += 32) {
         // Commit the prefetched tiles to the shared memory storage.
         __syncthreads();
         shared_a[tr_a ? ((q + 0) * 33 + p) : (p * 33 + (q + 0))] = buffer_a.x;
@@ -561,9 +564,12 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        if (k < size_k) {
-            buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-            buffer_b = *(float4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+        if (k + 32 < size_k) {
+            offset_a += 32 * (tr_a ? size_m : 1);
+            offset_b += 32 * (tr_b ? 1 : size_n);
+
+            buffer_a = *(float4 *) &matrix_a[offset_a + p * stride_a + q]; //(tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+            buffer_b = *(float4 *) &matrix_b[offset_b + p * stride_b + q]; //(tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
         }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
