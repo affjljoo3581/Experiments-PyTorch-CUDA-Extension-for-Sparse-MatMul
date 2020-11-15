@@ -44,7 +44,7 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     int p = threadIdx.x * 2 / 8;
     int q = threadIdx.x * 2 % 8 * 4;
     int r = threadIdx.x / 16 * 4;
-    int s = threadIdx.x % 16;
+    int s = threadIdx.x % 16 * 2;
 
     // Prefetch first tiles from matrices in global memory.
     *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
@@ -116,10 +116,10 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     result[3][1] = __low2half(accum[3][1]) + __high2half(accum[3][1]);
 
     // Write the accumulated results to the output matrix.
-    *(half2 *) &matrix_c[offset_c + (r + 0) * 32 + (s + 0)] = *(half2 *) &result[0][0];
-    *(half2 *) &matrix_c[offset_c + (r + 0) * 32 + (s + 1)] = *(half2 *) &result[1][0];
-    *(half2 *) &matrix_c[offset_c + (r + 1) * 32 + (s + 0)] = *(half2 *) &result[2][0];
-    *(half2 *) &matrix_c[offset_c + (r + 1) * 32 + (s + 1)] = *(half2 *) &result[3][0];
+    *(half2 *) &matrix_c[offset_c + (r + 0) * 32 + s] = *(half2 *) &result[0][0];
+    *(half2 *) &matrix_c[offset_c + (r + 1) * 32 + s] = *(half2 *) &result[1][0];
+    *(half2 *) &matrix_c[offset_c + (r + 2) * 32 + s] = *(half2 *) &result[2][0];
+    *(half2 *) &matrix_c[offset_c + (r + 3) * 32 + s] = *(half2 *) &result[3][0];
 }
 
 /**
