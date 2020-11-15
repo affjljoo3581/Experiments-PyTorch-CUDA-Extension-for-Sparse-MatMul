@@ -11,8 +11,8 @@
 #include "sparse_layout.cuh"
 
 
-struct __align__(8) half4 {
-    half2 x, y;
+struct __align__(16) half8 {
+    half2 x, y, z, w;
 };
 
 
@@ -33,7 +33,7 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     sparse_layout layout, int num_blocks, int size_m, int size_n, int size_k
 ) {
     __shared__ half2 shared_a[32 * 16 + 16], shared_b[32 * 16 + 16];
-    half4 buffer_a, buffer_b, neighbor;
+    half8 buffer_a, buffer_b, neighbor;
     half2 accum[4][2] = {{{ 0, 0 }}};
 
     // Load current block and get corresponding row and column positions.
@@ -46,37 +46,51 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     int offset_b = blockIdx.y * size_k * size_n;
     int offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
 
-    int p = threadIdx.x * 2 / 8;
-    int q = threadIdx.x * 2 % 8 * 4;
+    int p = threadIdx.x / 4;
+    int q = threadIdx.x % 4 * 8;
     int r = threadIdx.x / 16 * 4;
     int s = threadIdx.x % 16 * 2;
 
     // Prefetch first tiles from matrices in global memory.
-    buffer_a = *(half4 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
-    buffer_b = *(half4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
+    buffer_a = *(half8 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
+    buffer_b = *(half8 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
 
     #pragma unroll 1
     for (int k = 32; k <= size_k; k += 32) {
         if (tr_a) {
             neighbor.x = __shfl_xor_sync(0xffffffff, buffer_a.x, 16, warpSize);
             neighbor.y = __shfl_xor_sync(0xffffffff, buffer_a.y, 16, warpSize);
+            neighbor.z = __shfl_xor_sync(0xffffffff, buffer_a.z, 16, warpSize);
+            neighbor.w = __shfl_xor_sync(0xffffffff, buffer_a.w, 16, warpSize);
+
             buffer_a.x = (p % 2 == 0) ? __lows2half2(buffer_a.x, neighbor.x) : __highs2half2(neighbor.x, buffer_a.x);
             buffer_a.y = (p % 2 == 0) ? __lows2half2(buffer_a.y, neighbor.y) : __highs2half2(neighbor.y, buffer_a.y);
+            buffer_a.z = (p % 2 == 0) ? __lows2half2(buffer_a.z, neighbor.z) : __highs2half2(neighbor.z, buffer_a.z);
+            buffer_a.w = (p % 2 == 0) ? __lows2half2(buffer_a.w, neighbor.w) : __highs2half2(neighbor.w, buffer_a.w);
         }
 
         if (!tr_b) {
             neighbor.x = __shfl_xor_sync(0xffffffff, buffer_b.x, 16, warpSize);
             neighbor.y = __shfl_xor_sync(0xffffffff, buffer_b.y, 16, warpSize);
+            neighbor.z = __shfl_xor_sync(0xffffffff, buffer_b.z, 16, warpSize);
+            neighbor.w = __shfl_xor_sync(0xffffffff, buffer_b.w, 16, warpSize);
+
             buffer_b.x = (p % 2 == 0) ? __lows2half2(buffer_b.x, neighbor.x) : __highs2half2(neighbor.x, buffer_b.x);
             buffer_b.y = (p % 2 == 0) ? __lows2half2(buffer_b.y, neighbor.y) : __highs2half2(neighbor.y, buffer_b.y);
+            buffer_b.z = (p % 2 == 0) ? __lows2half2(buffer_b.z, neighbor.z) : __highs2half2(neighbor.z, buffer_b.z);
+            buffer_b.w = (p % 2 == 0) ? __lows2half2(buffer_b.w, neighbor.w) : __highs2half2(neighbor.w, buffer_b.w);
         }
 
         // Commit the prefetched tiles to the shared memory storage.
         __syncthreads();
         shared_a[tr_a ? ((q + p % 2 + 0) * 16 + (p + q + 0) / 2) : (p * 16 + (p + q + 0) / 2)] = buffer_a.x;
         shared_a[tr_a ? ((q + p % 2 + 2) * 16 + (p + q + 2) / 2) : (p * 16 + (p + q + 2) / 2)] = buffer_a.y;
+        shared_a[tr_a ? ((q + p % 2 + 4) * 16 + (p + q + 4) / 2) : (p * 16 + (p + q + 4) / 2)] = buffer_a.z;
+        shared_a[tr_a ? ((q + p % 2 + 6) * 16 + (p + q + 6) / 2) : (p * 16 + (p + q + 6) / 2)] = buffer_a.w;
         shared_b[tr_b ? (p * 16 + (p + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
         shared_b[tr_b ? (p * 16 + (p + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
+        shared_a[tr_a ? (p * 16 + (p + q + 4) / 2) : ((q + p % 2 + 4) * 16 + (p + q + 4) / 2)] = buffer_b.z;
+        shared_a[tr_a ? (p * 16 + (p + q + 6) / 2) : ((q + p % 2 + 6) * 16 + (p + q + 6) / 2)] = buffer_b.w;
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
