@@ -27,28 +27,25 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
     sparse_layout layout, int num_blocks,
     int size_m, int size_n, int size_k
 ) {
+    __shared__ float shared_a[32 * 33], shared_b[32 * 33];
+    float4 buffer_a, buffer_b;
     float accum[2][2] = { 0 };
 
-    float4 buffer_a, buffer_b;
-    __shared__ float shared_a[32 * 33], shared_b[32 * 33];
-
-    // Fetch current block and get corresponding row and column positions.
-    auto block = layout.get(blockIdx.x);
-    int m = block.row() * 32;
-    int n = block.col() * 32;
-
     // Get a stride and offset of each matrix and calculate mapping indices.
-    int stride_a = tr_a ? size_m : size_k;
-    int stride_b = tr_b ? size_k : size_n;
-
     int offset_a = blockIdx.y * size_m * size_k + (tr_a ? m : m * size_k);
     int offset_b = blockIdx.y * size_k * size_n + (tr_b ? n * size_k : n);
-    int offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+    int stride_a = tr_a ? size_m : size_k;
+    int stride_b = tr_b ? size_k : size_n;
 
     int p = threadIdx.x / 8;
     int q = threadIdx.x % 8 * 4;
     int r = threadIdx.x / 16 * 2;
     int s = threadIdx.x % 16 * 2;
+
+    // Fetch current block and get corresponding row and column positions.
+    auto block = layout.get(blockIdx.x);
+    int m = block.row() * 32;
+    int n = block.col() * 32;
 
     // Prefetch first tiles from matrices in global memory.
     buffer_a = *(float4 *) &matrix_a[offset_a + p * stride_a + q];
@@ -71,10 +68,12 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
 
         // Prefetch next tiles from matrices in global memory.
         if (k < size_k) {
-            buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? k * size_m : k)
-                                             + p * stride_a + q];
-            buffer_b = *(float4 *) &matrix_b[offset_b + (tr_b ? k : k * size_n)
-                                             + p * stride_b + q];
+            buffer_a = *(float4 *) &matrix_a[
+                offset_a + (tr_a ? k * size_m : k) + p * stride_a + q
+            ];
+            buffer_b = *(float4 *) &matrix_b[
+                offset_b + (tr_b ? k : k * size_n) + p * stride_b + q
+            ];
         }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
@@ -96,6 +95,8 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
     }
 
     // Write the accumulated results to the output matrix.
+    int offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
     matrix_c[offset_c + (r + 0) * 32 + (s + 0)] = accum[0][0];
     matrix_c[offset_c + (r + 0) * 32 + (s + 1)] = accum[0][1];
     matrix_c[offset_c + (r + 1) * 32 + (s + 0)] = accum[1][0];
@@ -106,20 +107,20 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
 torch::Tensor sparse_matmul(
     torch::Tensor a, torch::Tensor b, const std::string& mode,
     const layout_tensors& row_layout, const layout_tensors& col_layout,
-    bool trans_a, bool trans_b
+    bool tr_a, bool tr_b
 ) {
     // Select current sparse layout by the given sparse mode.
     auto layout = (mode == "sdd"
-                   || mode == "dsd" && !trans_a
-                   || mode == "dds" && trans_b) ? row_layout : col_layout;
+                   || mode == "dsd" && !tr_a
+                   || mode == "dds" && tr_b) ? row_layout : col_layout;
     uint num_blocks = std::get<0>(layout).size(0) / 2;
     uint sparse_width = (std::get<1>(layout).size(0) - 1) * 32;
 
     // Get the dimension sizes from the tensors.
-    uint size_m = mode.at(1) == 'd' ? a.size(trans_a ? -1 : -2) : sparse_width;
-    uint size_n = mode.at(2) == 'd' ? b.size(trans_b ? -2 : -1) : sparse_width;
-    uint size_k = mode.at(2) == 'd' ? b.size(trans_b ? -1 : -2)
-                                    : a.size(trans_a ? -2 : -1);
+    uint size_m = mode.at(1) == 'd' ? a.size(tr_a ? -1 : -2) : sparse_width;
+    uint size_n = mode.at(2) == 'd' ? b.size(tr_b ? -2 : -1) : sparse_width;
+    uint size_k = mode.at(2) == 'd' ? b.size(tr_b ? -1 : -2)
+                                    : a.size(tr_a ? -2 : -1);
 
     // Construct output tensor shape with preserving multiple batch dimensions.
     auto dense = mode.at(1) == 'd' ? a : b;
@@ -144,13 +145,13 @@ torch::Tensor sparse_matmul(
     else blocks = dim3(num_batches,
                        (size_m + 32 - 1) / 32, (size_n + 32 - 1) / 32);
 
+
     auto kernel = mode == "sdd" ? sparse_matmul_sdd_32x32x32_kernel<false, false> :
                   mode == "dsd" ? sparse_matmul_sdd_32x32x32_kernel<false, false> :
                                   sparse_matmul_sdd_32x32x32_kernel<false, false>;
-    kernel<<<blocks, 256>>>( //tile<float, 32, 8>::THREADS>>>(
+    kernel<<<blocks, 256>>>(
         a.data_ptr<float>(), b.data_ptr<float>(), c.data_ptr<float>(),
         layout, num_blocks, size_m, size_n, size_k //,
-        //trans_a, trans_b
     );
 
     // Return the output tensor with multiple batch dimensions.
