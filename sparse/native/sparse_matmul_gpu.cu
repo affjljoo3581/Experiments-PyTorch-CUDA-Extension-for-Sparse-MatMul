@@ -577,10 +577,10 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
             reg_b[0] = shared_b[(s + 0) * 33 + i];
             reg_b[1] = shared_b[(s + 1) * 33 + i];
 
-            accum[0][0] += reg_a[0] * reg_a[0];
-            accum[0][1] += reg_a[0] * reg_a[1];
-            accum[1][0] += reg_a[1] * reg_a[0];
-            accum[1][1] += reg_a[1] * reg_a[1];
+            accum[0][0] += reg_a[0] * reg_b[0];
+            accum[0][1] += reg_a[0] * reg_b[1];
+            accum[1][0] += reg_a[1] * reg_b[0];
+            accum[1][1] += reg_a[1] * reg_b[1];
         }
     }
 
