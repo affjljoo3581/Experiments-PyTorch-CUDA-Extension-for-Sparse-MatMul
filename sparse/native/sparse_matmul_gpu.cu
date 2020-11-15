@@ -9,7 +9,7 @@
 #include "sparse_kernels.h"
 #include "sparse_layout.cuh"
 
-#define USE_32x32_TILING_FUSED_COPY
+#define USE_VERY_OPTIMIZED_KERNEL
 
 /**
  * Compute sparse matrix multiplication with SDD mode.
@@ -508,6 +508,87 @@ __global__ void sparse_matmul_sdd_32x32x8_kernel(
     matrix_c[load_c + (tid / 16 * 2 + 0) * 32 + (tid % 16 * 2 + 1)] = accum[0][1];
     matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 0)] = accum[1][0];
     matrix_c[load_c + (tid / 16 * 2 + 1) * 32 + (tid % 16 * 2 + 1)] = accum[1][1];
+}
+#endif
+
+#ifdef USE_VERY_OPTIMIZED_KERNEL
+
+template <bool tr_a, bool tr_b>
+__global__ void sparse_matmul_sdd_32x32x32_kernel(
+    const float* __restrict__ matrix_a,
+    const float* __restrict__ matrix_b,
+          float* __restrict__ matrix_c,
+    sparse_layout layout, int num_blocks,
+    int size_m, int size_n, int size_k
+) {
+    float accum[2][2] = { 0 };
+
+    float4 buffer_a, buffer_b;
+    __shared__ float shared_a[32 * 33], shared_b[32 * 33];
+
+    // Fetch current block and get corresponding row and column positions.
+    auto block = layout.get(blockIdx.x);
+    int m = block.row() * 32;
+    int n = block.col() * 32;
+
+    // Get an offset of each matrix and calculate mapping indices.
+    int offset_a = blockIdx.y * size_m * size_k;
+    int offset_b = blockIdx.y * size_k * size_n;
+    int offset_c = (blockIdx.y * num_blocks + block.idx()) * 32 * 32;
+
+    int i = threadIdx.x / 8;
+    int j = threadIdx.x % 8 * 4;
+    int p = threadIdx.x / 16 * 2;
+    int q = threadIdx.x % 16 * 2;
+
+    // Prefetch first tiles from matrices in global memory.
+    buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((0 + i) * size_m + (m + j)) : ((m + i) * size_k + (0 + j)))];
+    buffer_b = *(float4 *) &matrix_b[offset_b + (tr_a ? ((n + i) * size_k + (0 + j)) : ((0 + i) * size_n + (n + j)))];
+
+    #pragma unroll
+    for (int k = 32; k <= size_k; k += 32) {
+        // Commit the prefetched tiles to the shared memory storage.
+        __syncthreads();
+        shared_a[tr_a ? ((j + 0) * 33 + i) : (i * 33 + (j + 0))] = buffer_a.x;
+        shared_a[tr_a ? ((j + 1) * 33 + i) : (i * 33 + (j + 1))] = buffer_a.y;
+        shared_a[tr_a ? ((j + 2) * 33 + i) : (i * 33 + (j + 2))] = buffer_a.z;
+        shared_a[tr_a ? ((j + 3) * 33 + i) : (i * 33 + (j + 3))] = buffer_a.w;
+
+        shared_b[tr_a ? (i * 33 + (j + 0)) : ((j + 0) * 33 + i)] = buffer_b.x;
+        shared_b[tr_a ? (i * 33 + (j + 1)) : ((j + 1) * 33 + i)] = buffer_b.y;
+        shared_b[tr_a ? (i * 33 + (j + 2)) : ((j + 2) * 33 + i)] = buffer_b.z;
+        shared_b[tr_a ? (i * 33 + (j + 2)) : ((j + 3) * 33 + i)] = buffer_b.w;
+        __syncthreads();
+
+        // Prefetch next tiles from matrices in global memory.
+        if (k < size_k) {
+            buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((k + i) * size_m + (m + j)) : ((m + i) * size_k + (k + j)))];
+            buffer_b = *(float4 *) &matrix_b[offset_b + (tr_a ? ((n + i) * size_k + (k + j)) : ((k + i) * size_n + (n + j)))];
+        }
+
+        // Accumulate the tiled matrix multiplications by loading sliced vectors
+        // from the shared memory to local register file.
+        #pragma unroll
+        for (int d = 0; d < 32; ++ d) {
+            float reg_a[2], reg_b[2];
+
+            reg_a[0] = shared_a[(p + 0) * 33 + d];
+            reg_a[1] = shared_a[(p + 1) * 33 + d];
+            reg_b[0] = shared_b[(q + 0) * 33 + d];
+            reg_b[0] = shared_b[(q + 1) * 33 + d];
+
+            accum[0][0] += reg_a[0] * reg_a[0];
+            accum[0][1] += reg_a[0] * reg_a[1];
+            accum[1][0] += reg_a[1] * reg_a[0];
+            accum[1][1] += reg_a[1] * reg_a[1];
+        }
+    }
+
+    // Write the accumulated results to the output matrix.
+    matrix_c[load_c + (p + 0) * 32 + (q + 0)] = accum[0][0];
+    matrix_c[load_c + (p + 0) * 32 + (q + 1)] = accum[0][1];
+    matrix_c[load_c + (p + 1) * 32 + (q + 0)] = accum[1][0];
+    matrix_c[load_c + (p + 1) * 32 + (q + 1)] = accum[1][1];
 }
 #endif
 
