@@ -149,7 +149,7 @@ __global__ void sparse_smm_dsd_32x32x32_kernel(
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        iter.next()
+        iter.next();
         if (iter.valid()) {
             block = *iter;
             buffer_a = *(float4 *) &matrix_a[offset_a + (block.idx() * 32 * 32) + p * 32 + q];
@@ -235,7 +235,7 @@ __global__ void sparse_smm_dds_32x32x32_kernel(
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        iter.next()
+        iter.next();
         if (iter.valid()) {
             block = *iter;
             buffer_a = *(float4 *) &matrix_a[offset_a + (block.idx() * 32 * 32) + p * 32 + q];
