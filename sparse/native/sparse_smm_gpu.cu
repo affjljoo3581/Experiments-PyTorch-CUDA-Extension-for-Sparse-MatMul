@@ -175,10 +175,10 @@ __global__ void sparse_smm_dsd_32x32x32_kernel(
     }
 
     // Write the accumulated results to the output matrix.
-    matrix_c[offset_c + (m + r + 0) * 32 + (n + s + 0)] = accum[0][0];
-    matrix_c[offset_c + (m + r + 0) * 32 + (n + s + 1)] = accum[0][1];
-    matrix_c[offset_c + (m + r + 1) * 32 + (n + s + 0)] = accum[1][0];
-    matrix_c[offset_c + (m + r + 1) * 32 + (n + s + 1)] = accum[1][1];
+    matrix_c[offset_c + (m + r + 0) * size_n + (n + s + 0)] = accum[0][0];
+    matrix_c[offset_c + (m + r + 0) * size_n + (n + s + 1)] = accum[0][1];
+    matrix_c[offset_c + (m + r + 1) * size_n + (n + s + 0)] = accum[1][0];
+    matrix_c[offset_c + (m + r + 1) * size_n + (n + s + 1)] = accum[1][1];
 }
 
 /**
@@ -261,10 +261,10 @@ __global__ void sparse_smm_dds_32x32x32_kernel(
     }
 
     // Write the accumulated results to the output matrix.
-    matrix_c[offset_c + (m + r + 0) * 32 + (n + s + 0)] = accum[0][0];
-    matrix_c[offset_c + (m + r + 0) * 32 + (n + s + 1)] = accum[0][1];
-    matrix_c[offset_c + (m + r + 1) * 32 + (n + s + 0)] = accum[1][0];
-    matrix_c[offset_c + (m + r + 1) * 32 + (n + s + 1)] = accum[1][1];
+    matrix_c[offset_c + (m + r + 0) * size_n + (n + s + 0)] = accum[0][0];
+    matrix_c[offset_c + (m + r + 0) * size_n + (n + s + 1)] = accum[0][1];
+    matrix_c[offset_c + (m + r + 1) * size_n + (n + s + 0)] = accum[1][0];
+    matrix_c[offset_c + (m + r + 1) * size_n + (n + s + 1)] = accum[1][1];
 }
 
 
