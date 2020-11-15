@@ -87,10 +87,10 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         shared_a[tr_a ? ((q + p % 2 + 2) * 16 + (p + q + 2) / 2) : (p * 16 + (0 + q + 2) / 2)] = buffer_a.y;
         shared_a[tr_a ? ((q + p % 2 + 4) * 16 + (p + q + 4) / 2) : (p * 16 + (0 + q + 4) / 2)] = buffer_a.z;
         shared_a[tr_a ? ((q + p % 2 + 6) * 16 + (p + q + 6) / 2) : (p * 16 + (0 + q + 6) / 2)] = buffer_a.w;
-        shared_b[tr_b ? (0 * 16 + (p + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
-        shared_b[tr_b ? (0 * 16 + (p + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
-        shared_a[tr_a ? (0 * 16 + (p + q + 4) / 2) : ((q + p % 2 + 4) * 16 + (p + q + 4) / 2)] = buffer_b.z;
-        shared_a[tr_a ? (0 * 16 + (p + q + 6) / 2) : ((q + p % 2 + 6) * 16 + (p + q + 6) / 2)] = buffer_b.w;
+        shared_b[tr_b ? (p * 16 + (0 + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
+        shared_b[tr_b ? (p * 16 + (0 + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
+        shared_a[tr_a ? (p * 16 + (0 + q + 4) / 2) : ((q + p % 2 + 4) * 16 + (p + q + 4) / 2)] = buffer_b.z;
+        shared_a[tr_a ? (p * 16 + (0 + q + 6) / 2) : ((q + p % 2 + 6) * 16 + (p + q + 6) / 2)] = buffer_b.w;
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
