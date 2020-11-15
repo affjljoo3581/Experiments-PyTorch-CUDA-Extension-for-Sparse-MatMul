@@ -11,12 +11,6 @@
 #include "sparse_layout.cuh"
 
 
-__device__ __forceinline__ half2 transpose_half2(half2 x, bool flag) {
-    half2 y = __shfl_xor_sync(0xffffffff, x, 16, warpSize);
-    return __lows2half2(x, y) : __highs2half2
-}
-
-
 /**
  * Compute half-precision sparse matrix multiplication with SDD mode.
  * 
@@ -35,7 +29,7 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
 ) {
     __shared__ half2 shared_a[32 * 17], shared_b[32 * 17];
     half2 buffer_a[2], buffer_b[2], neighbor;
-    half2 accum[4][2] = { 0 };
+    half2 accum[4][2] = { 0.0f };
 
     // Load current block and get corresponding row and column positions.
     auto block = layout.get(blockIdx.x);
