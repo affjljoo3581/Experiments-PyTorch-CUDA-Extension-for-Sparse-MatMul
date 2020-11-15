@@ -5,7 +5,9 @@
 #include <device_functions.h>
 #include <device_launch_parameters.h>
 
-#include "sparse_kernels.h"
+#include <tuple>
+#include <string>
+#include <torch/extension.h>
 
 
 class block_desc {
@@ -22,7 +24,7 @@ private:
 class sparse_iterator {
 public:
     __device__ __forceinline__ sparse_iterator(
-        const block_desc* __restrict__ base, uint current, uint end
+        const block_desc* __restrict__ base, int current, int end
     ) : base(base), current(current), end(end) {}
 
     __device__ __forceinline__ void next() { ++ current; }
@@ -32,7 +34,7 @@ public:
     }
 private:
     const block_desc* __restrict__ base;
-    uint current, end;
+    int current, end;
 };
 
 
@@ -46,11 +48,11 @@ public:
     sparse_layout(const layout_tensors& layout)
         : sparse_layout(std::get<0>(layout), std::get<1>(layout)) {}
 
-    __device__ __forceinline__ sparse_iterator begin(uint i) {
+    __device__ __forceinline__ sparse_iterator begin(int i) {
         return { blocks, offset_table[i], offset_table[i + 1] };
     }
 
-    __device__ __forceinline__ const block_desc& get(uint i) {
+    __device__ __forceinline__ const block_desc& get(int i) {
         return blocks[i];
     }
 private:
