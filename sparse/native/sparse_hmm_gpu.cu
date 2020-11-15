@@ -107,8 +107,8 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
             reg_a[1] = shared_a[(r + 1) * 16 + i + (r / 2 + 0) * 0];
             reg_a[2] = shared_a[(r + 2) * 16 + i + (r / 2 + 1) * 0];
             reg_a[3] = shared_a[(r + 3) * 16 + i + (r / 2 + 1) * 0];
-            reg_b[0] = { 1, 1 }; //shared_b[(s + 0) * 16 + i + s / 2 * 0];
-            reg_b[1] = { 1, 1 }; // shared_b[(s + 1) * 16 + i + s / 2 * 0];
+            reg_b[0] = shared_b[(s + 0) * 16 + i + s / 2 * 0];
+            reg_b[1] = shared_b[(s + 1) * 16 + i + s / 2 * 0];
 
             accum[0][0] += reg_a[0] * reg_b[0];
             accum[0][1] += reg_a[0] * reg_b[1];
