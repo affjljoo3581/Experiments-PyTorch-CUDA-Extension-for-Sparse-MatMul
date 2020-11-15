@@ -21,12 +21,14 @@ torch::Tensor sparse_matmul(
     // Construct output tensor shape with preserving multiple batch dimensions.
     auto dense = mode.at(1) == 'd' ? a : b;
     auto shape = dense.sizes().slice(0, a.dim() - 2).vec();
+
     if (mode.at(0) == 'd') shape.insert(shape.end(), { size_m, size_n });
     else shape.insert(shape.end(), { num_blocks, 32, 32 });
 
     // Merge the batch dimensions to one.
     a = a.flatten(0, mode.at(1) == 'd' ? -3 : -4);
     b = b.flatten(0, mode.at(2) == 'd' ? -3 : -4);
+
     int num_batches = a.size(0);
 
     // Create an empty output tensor and launch CUDA kernel.
