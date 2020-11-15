@@ -95,8 +95,8 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
 
         // Prefetch next tiles from matrices in global memory.
         if (k < size_k) {
-            buffer_a = *(half4 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-            buffer_b = *(half4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+            buffer_a = *(half8 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+            buffer_b = *(half8 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
         }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
