@@ -131,8 +131,8 @@ __global__ void sparse_smm_dsd_32x32x32_kernel(
     // Prefetch first tiles from matrices in global memory.
     auto iter = layout.begin(blockIdx.y);
     auto block = *iter;
-    buffer_a = *(float4 *) &matrix_a[offset_a + (block.idx() * 32 * 32) + p * 32 + q];
-    buffer_b = *(float4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (block.col() * 32 + q)) : ((block.col() * 32 + p) * size_n + (n + q)))];
+    buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((block.col() * 32 + p) * size_m + (m + q)) : ((m + p) * size_k + (block.col() * 32 + q)))];
+    buffer_b = *(float4 *) &matrix_b[offset_b + (block.idx() * 32 * 32) + p * 32 + q];
 
     #pragma unroll 1
     while (iter.valid()) {
@@ -152,8 +152,8 @@ __global__ void sparse_smm_dsd_32x32x32_kernel(
         iter.next();
         if (iter.valid()) {
             block = *iter;
-            buffer_a = *(float4 *) &matrix_a[offset_a + (block.idx() * 32 * 32) + p * 32 + q];
-            buffer_b = *(float4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (block.col() * 32 + q)) : ((block.col() * 32 + p) * size_n + (n + q)))];
+            buffer_a = *(float4 *) &matrix_a[offset_a + (tr_a ? ((block.col() * 32 + p) * size_m + (m + q)) : ((m + p) * size_k + (block.col() * 32 + q)))];
+            buffer_b = *(float4 *) &matrix_b[offset_b + (block.idx() * 32 * 32) + p * 32 + q];
         }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
