@@ -11,6 +11,11 @@
 #include "sparse_layout.cuh"
 
 
+struct __align__(8) half4 {
+    half2 x, y;
+};
+
+
 /**
  * Compute half-precision sparse matrix multiplication with SDD mode.
  * 
@@ -27,8 +32,8 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
           half* __restrict__ matrix_c,
     sparse_layout layout, int num_blocks, int size_m, int size_n, int size_k
 ) {
-    __shared__ half2 shared_a[32 * 17], shared_b[32 * 17];
-    half2 buffer_a[2], buffer_b[2], neighbor;
+    __shared__ half2 shared_a[32 * 16 + 16], shared_b[32 * 16 + 16];
+    half4 buffer_a, buffer_b, neighbor;
     half2 accum[4][2] = {{{ 0, 0 }}};
 
     // Load current block and get corresponding row and column positions.
@@ -47,39 +52,37 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
     int s = threadIdx.x % 16 * 2;
 
     // Prefetch first tiles from matrices in global memory.
-    *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
-    *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
+    buffer_a = *(half4 *) &matrix_a[offset_a + (tr_a ? ((0 + p) * size_m + (m + q)) : ((m + p) * size_k + (0 + q)))];
+    buffer_b = *(half4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (0 + q)) : ((0 + p) * size_n + (n + q)))];
 
     #pragma unroll 1
     for (int k = 32; k <= size_k; k += 32) {
         if (tr_a) {
-            neighbor = __shfl_xor_sync(0xffffffff, buffer_a[0], 16, warpSize);
-            buffer_a[0] = (p % 2 == 0) ? __lows2half2(buffer_a[0], neighbor) : __highs2half2(neighbor, buffer_a[0]);
-
-            neighbor = __shfl_xor_sync(0xffffffff, buffer_a[1], 16, warpSize);
-            buffer_a[1] = (p % 2 == 0) ? __lows2half2(buffer_a[1], neighbor) : __highs2half2(neighbor, buffer_a[1]);
+            neighbor.x = __shfl_xor_sync(0xffffffff, buffer_a.x, 16, warpSize);
+            neighbor.y = __shfl_xor_sync(0xffffffff, buffer_a.y, 16, warpSize);
+            buffer_a.x = (p % 2 == 0) ? __lows2half2(buffer_a.x, neighbor.x) : __highs2half2(neighbor.x, buffer_a.x);
+            buffer_a.y = (p % 2 == 0) ? __lows2half2(buffer_a.y, neighbor.y) : __highs2half2(neighbor.y, buffer_a.y);
         }
 
         if (!tr_b) {
-            neighbor = __shfl_xor_sync(0xffffffff, buffer_b[0], 16, warpSize);
-            buffer_b[0] = (p % 2 == 0) ? __lows2half2(buffer_b[0], neighbor) : __highs2half2(neighbor, buffer_b[0]);
-
-            neighbor = __shfl_xor_sync(0xffffffff, buffer_b[1], 16, warpSize);
-            buffer_b[1] = (p % 2 == 0) ? __lows2half2(buffer_b[1], neighbor) : __highs2half2(neighbor, buffer_b[1]);
+            neighbor.x = __shfl_xor_sync(0xffffffff, buffer_b.x, 16, warpSize);
+            neighbor.y = __shfl_xor_sync(0xffffffff, buffer_b.y, 16, warpSize);
+            buffer_b.x = (p % 2 == 0) ? __lows2half2(buffer_b.x, neighbor.x) : __highs2half2(neighbor.x, buffer_b.x);
+            buffer_b.y = (p % 2 == 0) ? __lows2half2(buffer_b.y, neighbor.y) : __highs2half2(neighbor.y, buffer_b.y);
         }
 
         // Commit the prefetched tiles to the shared memory storage.
         __syncthreads();
-        shared_a[tr_a ? ((q + 0 + p % 2) * 17 + p / 2) : (p * 17 + (q + 0) / 2)] = buffer_a[0];
-        shared_a[tr_a ? ((q + 2 + p % 2) * 17 + p / 2) : (p * 17 + (q + 2) / 2)] = buffer_a[1];
-        shared_b[tr_b ? (p * 17 + (q + 0) / 2) : ((q + 0 + p % 2) * 17 + p / 2)] = buffer_b[0];
-        shared_b[tr_b ? (p * 17 + (q + 2) / 2) : ((q + 2 + p % 2) * 17 + p / 2)] = buffer_b[1];
+        shared_a[tr_a ? ((q + p % 2 + 0) * 16 + (p + q + 0) / 2) : (p * 16 + (p + q + 0) / 2)] = buffer_a.x;
+        shared_a[tr_a ? ((q + p % 2 + 2) * 16 + (p + q + 2) / 2) : (p * 16 + (p + q + 2) / 2)] = buffer_a.y;
+        shared_b[tr_b ? (p * 16 + (p + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
+        shared_b[tr_b ? (p * 16 + (p + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
         if (k < size_k) {
-            *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-            *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+            buffer_a = *(half4 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+            buffer_b = *(half4 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
         }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
@@ -88,12 +91,12 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         for (int i = 0; i < 16; ++ i) {
             half2 reg_a[4], reg_b[2];
 
-            reg_a[0] = shared_a[(r + 0) * 17 + i];
-            reg_a[1] = shared_a[(r + 1) * 17 + i];
-            reg_a[2] = shared_a[(r + 2) * 17 + i];
-            reg_a[3] = shared_a[(r + 3) * 17 + i];
-            reg_b[0] = shared_b[(s + 0) * 17 + i];
-            reg_b[1] = shared_b[(s + 1) * 17 + i];
+            reg_a[0] = shared_a[(r + 0) * 16 + i + (r / 2 + 0)];
+            reg_a[1] = shared_a[(r + 1) * 16 + i + (r / 2 + 0)];
+            reg_a[2] = shared_a[(r + 2) * 16 + i + (r / 2 + 1)];
+            reg_a[3] = shared_a[(r + 3) * 16 + i + (r / 2 + 1)];
+            reg_b[0] = shared_b[(s + 0) * 16 + i + s / 2];
+            reg_b[1] = shared_b[(s + 1) * 16 + i + s / 2];
 
             accum[0][0] += reg_a[0] * reg_b[0];
             accum[0][1] += reg_a[0] * reg_b[1];
