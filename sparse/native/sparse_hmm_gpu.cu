@@ -29,7 +29,7 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
 ) {
     __shared__ half2 shared_a[32 * 17], shared_b[32 * 17];
     half2 buffer_a[2], buffer_b[2], neighbor;
-    half2 accum[4][2] = { 0.0f };
+    half2 accum[4][2] = { { 0.0f, 0.0f } };
 
     // Load current block and get corresponding row and column positions.
     auto block = layout.get(blockIdx.x);
