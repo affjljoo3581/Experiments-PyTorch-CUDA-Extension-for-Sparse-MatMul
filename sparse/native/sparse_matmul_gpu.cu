@@ -557,7 +557,7 @@ __global__ void sparse_matmul_sdd_32x32x32_kernel(
         shared_b[tr_b ? (p * 33 + (q + 0)) : ((q + 0) * 33 + p)] = buffer_b.x;
         shared_b[tr_b ? (p * 33 + (q + 1)) : ((q + 1) * 33 + p)] = buffer_b.y;
         shared_b[tr_b ? (p * 33 + (q + 2)) : ((q + 2) * 33 + p)] = buffer_b.z;
-        shared_b[tr_b ? (p * 33 + (q + 2)) : ((q + 3) * 33 + p)] = buffer_b.w;
+        shared_b[tr_b ? (p * 33 + (q + 3)) : ((q + 3) * 33 + p)] = buffer_b.w;
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
