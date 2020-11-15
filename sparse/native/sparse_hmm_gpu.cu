@@ -32,7 +32,7 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
           half* __restrict__ matrix_c,
     sparse_layout layout, int num_blocks, int size_m, int size_n, int size_k
 ) {
-    __shared__ half2 shared_a[32 * 16 + 16], shared_b[32 * 16 + 16];
+    __shared__ half2 shared_a[32 * 16 + 32], shared_b[32 * 16 + 32];
     half8 buffer_a, buffer_b, neighbor;
     half2 accum[4][2] = {{{ 0, 0 }}};
 
