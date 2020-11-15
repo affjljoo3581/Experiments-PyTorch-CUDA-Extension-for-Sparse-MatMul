@@ -70,17 +70,17 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
 
         // Commit the prefetched tiles to the shared memory storage.
         __syncthreads();
-        shared_a[tr_a ? ((q + p % 2 + 0) * 17 + p / 2) : (p * 17 + (q + 0) / 2)] = buffer_a[0];
-        shared_a[tr_a ? ((q + p % 2 + 2) * 17 + p / 2) : (p * 17 + (q + 2) / 2)] = buffer_a[1];
-        shared_b[tr_b ? (p * 17 + (q + 0) / 2) : ((q + p % 2 + 0) * 17 + p / 2)] = buffer_b[0];
-        shared_b[tr_b ? (p * 17 + (q + 2) / 2) : ((q + p % 2 + 2) * 17 + p / 2)] = buffer_b[1];
+        shared_a[tr_a ? ((q + 0 + p % 2) * 17 + p / 2) : (p * 17 + (q + 0) / 2)] = buffer_a[0];
+        shared_a[tr_a ? ((q + 2 + p % 2) * 17 + p / 2) : (p * 17 + (q + 2) / 2)] = buffer_a[1];
+        shared_b[tr_b ? (p * 17 + (q + 0) / 2) : ((q + 0 + p % 2) * 17 + p / 2)] = buffer_b[0];
+        shared_b[tr_b ? (p * 17 + (q + 2) / 2) : ((q + 2 + p % 2) * 17 + p / 2)] = buffer_b[1];
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        //if (k < size_k) {
-        //    *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-        //    *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
-        //}
+        if (k < size_k) {
+            *(int2 *) &buffer_a = *(int2 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+            *(int2 *) &buffer_b = *(int2 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+        }
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
         // from the shared memory to local register file.
@@ -88,12 +88,12 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         for (int i = 0; i < 16; ++ i) {
             half2 reg_a[4], reg_b[2];
 
-            reg_a[0] = shared_a[(r + 0) * 33 + i];
-            reg_a[1] = shared_a[(r + 1) * 33 + i];
-            reg_a[2] = shared_a[(r + 2) * 33 + i];
-            reg_a[3] = shared_a[(r + 3) * 33 + i];
-            reg_b[0] = shared_b[(s + 0) * 33 + i];
-            reg_b[1] = shared_b[(s + 1) * 33 + i];
+            reg_a[0] = shared_a[(r + 0) * 17 + i];
+            reg_a[1] = shared_a[(r + 1) * 17 + i];
+            reg_a[2] = shared_a[(r + 2) * 17 + i];
+            reg_a[3] = shared_a[(r + 3) * 17 + i];
+            reg_b[0] = shared_b[(s + 0) * 17 + i];
+            reg_b[1] = shared_b[(s + 1) * 17 + i];
 
             accum[0][0] += reg_a[0] * reg_b[0];
             accum[0][1] += reg_a[0] * reg_b[1];
