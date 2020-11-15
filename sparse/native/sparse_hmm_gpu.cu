@@ -83,14 +83,14 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
 
         // Commit the prefetched tiles to the shared memory storage.
         __syncthreads();
-        shared_a[tr_a ? ((q + p % 2 + 0) * 16 + (p + q + 0) / 2) : (p * 16 + (p + q + 0) / 2)] = buffer_a.x;
-        shared_a[tr_a ? ((q + p % 2 + 2) * 16 + (p + q + 2) / 2) : (p * 16 + (p + q + 2) / 2)] = buffer_a.y;
-        shared_a[tr_a ? ((q + p % 2 + 4) * 16 + (p + q + 4) / 2) : (p * 16 + (p + q + 4) / 2)] = buffer_a.z;
-        shared_a[tr_a ? ((q + p % 2 + 6) * 16 + (p + q + 6) / 2) : (p * 16 + (p + q + 6) / 2)] = buffer_a.w;
-        shared_b[tr_b ? (p * 16 + (p + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
-        shared_b[tr_b ? (p * 16 + (p + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
-        shared_a[tr_a ? (p * 16 + (p + q + 4) / 2) : ((q + p % 2 + 4) * 16 + (p + q + 4) / 2)] = buffer_b.z;
-        shared_a[tr_a ? (p * 16 + (p + q + 6) / 2) : ((q + p % 2 + 6) * 16 + (p + q + 6) / 2)] = buffer_b.w;
+        shared_a[tr_a ? ((q + p % 2 + 0) * 16 + (p + q + 0) / 2) : (p * 16 + (0 + q + 0) / 2)] = buffer_a.x;
+        shared_a[tr_a ? ((q + p % 2 + 2) * 16 + (p + q + 2) / 2) : (p * 16 + (0 + q + 2) / 2)] = buffer_a.y;
+        shared_a[tr_a ? ((q + p % 2 + 4) * 16 + (p + q + 4) / 2) : (p * 16 + (0 + q + 4) / 2)] = buffer_a.z;
+        shared_a[tr_a ? ((q + p % 2 + 6) * 16 + (p + q + 6) / 2) : (p * 16 + (0 + q + 6) / 2)] = buffer_a.w;
+        shared_b[tr_b ? (0 * 16 + (p + q + 0) / 2) : ((q + p % 2 + 0) * 16 + (p + q + 0) / 2)] = buffer_b.x;
+        shared_b[tr_b ? (0 * 16 + (p + q + 2) / 2) : ((q + p % 2 + 2) * 16 + (p + q + 2) / 2)] = buffer_b.y;
+        shared_a[tr_a ? (0 * 16 + (p + q + 4) / 2) : ((q + p % 2 + 4) * 16 + (p + q + 4) / 2)] = buffer_b.z;
+        shared_a[tr_a ? (0 * 16 + (p + q + 6) / 2) : ((q + p % 2 + 6) * 16 + (p + q + 6) / 2)] = buffer_b.w;
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
@@ -105,12 +105,12 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         for (int i = 0; i < 16; ++ i) {
             half2 reg_a[4], reg_b[2];
 
-            reg_a[0] = shared_a[(r + 0) * 16 + i + (r / 2 + 0)];
-            reg_a[1] = shared_a[(r + 1) * 16 + i + (r / 2 + 0)];
-            reg_a[2] = shared_a[(r + 2) * 16 + i + (r / 2 + 1)];
-            reg_a[3] = shared_a[(r + 3) * 16 + i + (r / 2 + 1)];
-            reg_b[0] = shared_b[(s + 0) * 16 + i + s / 2];
-            reg_b[1] = shared_b[(s + 1) * 16 + i + s / 2];
+            reg_a[0] = shared_a[(r + 0) * 16 + i + (r / 2 + 0) * 0];
+            reg_a[1] = shared_a[(r + 1) * 16 + i + (r / 2 + 0) * 0];
+            reg_a[2] = shared_a[(r + 2) * 16 + i + (r / 2 + 1) * 0];
+            reg_a[3] = shared_a[(r + 3) * 16 + i + (r / 2 + 1) * 0];
+            reg_b[0] = shared_b[(s + 0) * 16 + i + s / 2 * 0];
+            reg_b[1] = shared_b[(s + 1) * 16 + i + s / 2 * 0];
 
             accum[0][0] += reg_a[0] * reg_b[0];
             accum[0][1] += reg_a[0] * reg_b[1];
