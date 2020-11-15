@@ -36,8 +36,14 @@ torch::Tensor sparse_matmul(
     if (mode.at(0) == 'd') c = a.new_empty( {num_batches, size_m, size_n });
     else c = a.new_empty({ num_batches, num_blocks, 32, 32 });
 
-    if (a.scalar_type() == at::kFloat)
-        sparse_smm_32x32x32_wrapper(a, b, c, mode, layout, num_blocks, num_batches, size_m, size_n, size_k, tr_a, tr_b);
+    switch (a.scalar_type()) {
+        case at::kFloat:
+            sparse_smm_32x32x32_kernel_wrapper(a, b, c, mode, layout, num_blocks, num_batches, size_m, size_n, size_k, tr_a, tr_b);
+            break;
+        case at::kHalf:
+            sparse_hmm_32x32x32_kernel_wrapper(a, b, c, mode, layout, num_blocks, num_batches, size_m, size_n, size_k, tr_a, tr_b);
+            break;
+    }
 
     // Return the output tensor with multiple batch dimensions.
     return c.reshape(shape);
