@@ -92,10 +92,10 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
         __syncthreads();
 
         // Prefetch next tiles from matrices in global memory.
-        if (k < size_k) {
-            buffer_a = *(half8 *) &matrix_a[0];//offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
-            buffer_b = *(half8 *) &matrix_b[0];//offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
-        }
+        //if (k < size_k) {
+        //    buffer_a = *(half8 *) &matrix_a[offset_a + (tr_a ? ((k + p) * size_m + (m + q)) : ((m + p) * size_k + (k + q)))];
+        //    buffer_b = *(half8 *) &matrix_b[offset_b + (tr_b ? ((n + p) * size_k + (k + q)) : ((k + p) * size_n + (n + q)))];
+        //}
 
         // Accumulate the tiled matrix multiplications by loading sliced vectors
         // from the shared memory to local register file.
@@ -107,9 +107,9 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
             reg_a[1] = shared_a[(r + 1) * 16 + i + (r / 2 + 0) * 0];
             reg_a[2] = shared_a[(r + 2) * 16 + i + (r / 2 + 1) * 0];
             reg_a[3] = shared_a[(r + 3) * 16 + i + (r / 2 + 1) * 0];
-            reg_b[0] = shared_b[(s + 0) * 16 + i + s / 2 * 0];
-            reg_b[1] = shared_b[(s + 1) * 16 + i + s / 2 * 0];
-            /*
+            reg_b[0] = 1; //shared_b[(s + 0) * 16 + i + s / 2 * 0];
+            reg_b[1] = 1; // shared_b[(s + 1) * 16 + i + s / 2 * 0];
+
             accum[0][0] += reg_a[0] * reg_b[0];
             accum[0][1] += reg_a[0] * reg_b[1];
             accum[1][0] += reg_a[1] * reg_b[0];
@@ -118,7 +118,6 @@ __global__ void sparse_hmm_sdd_32x32x32_kernel(
             accum[2][1] += reg_a[2] * reg_b[1];
             accum[3][0] += reg_a[3] * reg_b[0];
             accum[3][1] += reg_a[3] * reg_b[1];
-            */
         }
     }
 
